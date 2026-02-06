@@ -215,6 +215,11 @@ __marimo__/
 /data/mixed/*.fcs
 /data/mixed/*.FCS
 
+# Ignore compensated CSV files from preprocessing
+/data/positive/*_compensated.csv
+/data/mixed_training/*_compensated.csv
+/data/mixed/*_compensated.csv
+
 # Ignore all generated output files (but keep the directory structure)
 /output/*
 !/output/.gitkeep
