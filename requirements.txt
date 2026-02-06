@@ -11,6 +11,10 @@ fcsparser>=0.2.0
 flowio>=1.0.0  # For reading/writing FCS files with compensation support
 flowutils>=1.0.0  # FCS file utilities
 
+# Optional: For production-grade FCS writing (not in PyPI, install separately)
+# FlowKit: https://github.com/whitews/FlowKit
+# fcswrite: https://github.com/ZELLMECHANIK-DRESDEN/fcswrite
+
 # Progress bars
 tqdm>=4.62.0
 

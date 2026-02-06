@@ -51,7 +51,8 @@ python preprocess_data.py --overwrite
    - HEU/UE samples → `/data/mixed_training/` (for Phase 2 training)
    - NA samples → `/data/mixed/` (for final testing)
 5. **Renames files** to include label and stimulation (e.g., `147.fcs` → `147_UE_CPG.fcs`)
-6. **Preserves FCS format** with metadata intact
+
+**Note:** The current implementation copies FCS files and saves compensated data to CSV format due to limitations in FCS writing libraries. For production use with proper FCS format output, consider using FlowKit or fcswrite libraries.
 
 ### Compensation Matrix Format
 
