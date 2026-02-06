@@ -211,11 +211,15 @@ class FCSPreprocessor:
         # Find matching columns in FCS data
         available_cols = list(fcs_data.columns)
         matched_cols = []
+        unmatched_markers = []
         
         for marker in markers:
+            matched = False
+            
             # Try exact match first
             if marker in available_cols:
                 matched_cols.append(marker)
+                matched = True
                 continue
             
             # Try case-insensitive match
@@ -223,19 +227,29 @@ class FCSPreprocessor:
             for col in available_cols:
                 if marker_lower == col.lower():
                     matched_cols.append(col)
+                    matched = True
                     break
-            else:
-                # Try partial match
+            
+            if not matched:
+                # Try partial match (must be substring, not just overlapping characters)
                 for col in available_cols:
-                    if marker_lower in col.lower() or col.lower() in marker_lower:
+                    col_lower = col.lower()
+                    # Only match if marker is a clear substring of column name
+                    # or column name is a clear substring of marker
+                    if (marker_lower in col_lower and len(marker_lower) >= 3) or \
+                       (col_lower in marker_lower and len(col_lower) >= 3):
                         matched_cols.append(col)
+                        matched = True
                         logger.debug(f"Matched marker '{marker}' to column '{col}'")
                         break
+            
+            if not matched:
+                unmatched_markers.append(marker)
         
         if len(matched_cols) != len(markers):
             raise ValueError(
                 f"Could not match all markers. Expected {len(markers)}, "
-                f"found {len(matched_cols)}"
+                f"found {len(matched_cols)}. Unmatched: {unmatched_markers}"
             )
         
         # Extract relevant columns
@@ -533,17 +547,18 @@ class MetadataRouter:
         base_name = os.path.splitext(filename)[0]
         
         # Construct new filename with label
-        if include_stimulation and stimulation and stimulation != "NA":
-            new_filename = f"{base_name}_{label}_{stimulation}.fcs"
-        else:
-            if label != "NA":
-                new_filename = f"{base_name}_{label}.fcs"
+        if label != "NA":
+            # For labeled data (HEU, UE), include label
+            if include_stimulation and stimulation and stimulation != "NA":
+                new_filename = f"{base_name}_{label}_{stimulation}.fcs"
             else:
-                # For NA (unlabeled), keep original format with stimulation
-                if include_stimulation and stimulation and stimulation != "NA":
-                    new_filename = f"{base_name}_{stimulation}.fcs"
-                else:
-                    new_filename = filename
+                new_filename = f"{base_name}_{label}.fcs"
+        else:
+            # For NA (unlabeled), don't include label, just stimulation
+            if include_stimulation and stimulation and stimulation != "NA":
+                new_filename = f"{base_name}_{stimulation}.fcs"
+            else:
+                new_filename = filename
         
         # Determine directory based on label
         if label == "HEU" and is_training:
