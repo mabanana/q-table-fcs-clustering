@@ -23,14 +23,14 @@ from src.trainer import ReinforcementClusteringPipeline
 from src.visualizer import VisualizationEngine
 
 
-def configure_logging(log_filepath: str = "output/training.log", verbosity: str = "INFO"):
+def configure_logging(log_filepath: str = "output/training.log", log_level: str = "INFO"):
     """Set up logging configuration."""
     os.makedirs(os.path.dirname(log_filepath), exist_ok=True)
     
-    log_level = getattr(logging, verbosity.upper())
+    level = getattr(logging, log_level.upper())
     
     logging.basicConfig(
-        level=log_level,
+        level=level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
             logging.FileHandler(log_filepath),
@@ -319,7 +319,7 @@ Examples:
     args = parser.parse_args()
     
     # Configure logging
-    logger = configure_logging(verbosity=args.log_level)
+    logger = configure_logging(log_level=args.log_level)
     
     logger.info("=" * 80)
     logger.info("Q-LEARNING FCS CLUSTERING SYSTEM")

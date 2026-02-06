@@ -15,9 +15,15 @@ markers:
 
 # Discretization bins (clinically-informed thresholds)
 discretization:
-  cd4_bins: [0, 200, 350, 500, 999999]  # WHO HIV staging criteria
-  cd4_cd8_ratio_bins: [0, 1.0, 1.5, 2.5, 999999]  # Clinical significance
-  activation_bins: [0, 500, 1500, 3000, 999999]  # HLA-DR activation levels
+  # WHO HIV staging criteria for CD4 counts (cells/μL)
+  # Note: 999999 is used as practical upper bound (effectively infinity for cell counts)
+  cd4_bins: [0, 200, 350, 500, 999999]
+  
+  # Clinical significance of CD4/CD8 ratio
+  cd4_cd8_ratio_bins: [0, 1.0, 1.5, 2.5, 999999]
+  
+  # HLA-DR activation levels (MFI or count)
+  activation_bins: [0, 500, 1500, 3000, 999999]
   
 # Q-learning parameters
 q_learning:

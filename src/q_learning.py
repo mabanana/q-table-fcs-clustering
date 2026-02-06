@@ -175,6 +175,15 @@ class QLearningAgent:
         self.epsilon = self.epsilon_start
         logger.info(f"Epsilon reset to {self.epsilon}")
     
+    def reset_counters(self):
+        """
+        Reset exploration and exploitation counters.
+        Useful for tracking statistics per training phase.
+        """
+        self.exploration_count = 0
+        self.exploitation_count = 0
+        logger.info("Exploration/exploitation counters reset")
+    
     def record_episode(self, total_reward: float, actions: List[int]):
         """
         Record statistics from an episode.
