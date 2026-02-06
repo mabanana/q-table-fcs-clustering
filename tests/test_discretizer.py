@@ -76,7 +76,7 @@ class TestClinicalDiscretizer:
             'HLA-DR': [400, 1000, 2000, 5000]
         })
         
-        result = self.discretizer.discretize_data(data)
+        result = self.discretizer.discretize_data(data, activation_column='HLA-DR')
         
         # Check that discretized columns were added
         assert 'cd4_bin' in result.columns
