@@ -36,7 +36,7 @@ class ReinforcementClusteringPipeline:
         discretizer: ClinicalDiscretizer,
         fcs_loader: FCSLoader,
         clustering_engine: ClusteringEngine,
-        use_activation: bool = False
+        selected_markers: List[str]
     ):
         """
         Initialize the reinforcement clustering pipeline.
@@ -47,19 +47,20 @@ class ReinforcementClusteringPipeline:
             discretizer: Feature discretization module
             fcs_loader: Flow cytometry file loader
             clustering_engine: Clustering computation module
-            use_activation: Include activation markers in state encoding
+            selected_markers: List of marker names to use for state encoding
         """
         self.decision_maker = q_agent
         self.cluster_action_map = action_space
         self.feature_binner = discretizer
         self.data_reader = fcs_loader
         self.cluster_computer = clustering_engine
-        self.include_activation_marker = use_activation
+        self.selected_markers = selected_markers
         
         self.phase1_progress = []
         self.phase2_progress = []
         
         logger.info("Initialized ReinforcementClusteringPipeline")
+        logger.info(f"Selected markers for state space: {selected_markers}")
     
     def execute_quality_learning_phase(
         self,
@@ -100,16 +101,11 @@ class ReinforcementClusteringPipeline:
         # Apply clinical binning
         binned_features = self.feature_binner.discretize_data(
             summary_stats,
-            cd4_column=self._locate_marker_column(summary_stats, "CD4"),
-            cd8_column=self._locate_marker_column(summary_stats, "CD8"),
-            activation_column=self._locate_marker_column(summary_stats, "HLA-DR") if self.include_activation_marker else None
+            markers=self.selected_markers
         )
         
         # Encode as discrete states
-        encoded_states = self.feature_binner.get_state_from_data(
-            binned_features,
-            use_activation=self.include_activation_marker
-        )
+        encoded_states = self.feature_binner.get_state_from_data(binned_features)
         
         logger.info(f"State space coverage: {len(np.unique(encoded_states))} unique states")
         
@@ -251,16 +247,11 @@ class ReinforcementClusteringPipeline:
         # Apply clinical binning
         binned_features = self.feature_binner.discretize_data(
             labeled_subset,
-            cd4_column=self._locate_marker_column(labeled_subset, "CD4"),
-            cd8_column=self._locate_marker_column(labeled_subset, "CD8"),
-            activation_column=self._locate_marker_column(labeled_subset, "HLA-DR") if self.include_activation_marker else None
+            markers=self.selected_markers
         )
         
         # Encode states
-        encoded_states = self.feature_binner.get_state_from_data(
-            binned_features,
-            use_activation=self.include_activation_marker
-        )
+        encoded_states = self.feature_binner.get_state_from_data(binned_features)
         
         # Extract features and ground truth
         cluster_inputs = self._build_feature_matrix(labeled_subset)
@@ -393,16 +384,11 @@ class ReinforcementClusteringPipeline:
         # Apply clinical binning
         binned_features = self.feature_binner.discretize_data(
             summary_stats,
-            cd4_column=self._locate_marker_column(summary_stats, "CD4"),
-            cd8_column=self._locate_marker_column(summary_stats, "CD8"),
-            activation_column=self._locate_marker_column(summary_stats, "HLA-DR") if self.include_activation_marker else None
+            markers=self.selected_markers
         )
         
         # Encode states
-        encoded_states = self.feature_binner.get_state_from_data(
-            binned_features,
-            use_activation=self.include_activation_marker
-        )
+        encoded_states = self.feature_binner.get_state_from_data(binned_features)
         
         # Extract features
         cluster_inputs = self._build_feature_matrix(summary_stats)
@@ -457,19 +443,14 @@ class ReinforcementClusteringPipeline:
     
     def _build_feature_matrix(self, dataframe: pd.DataFrame) -> np.ndarray:
         """Build numerical feature matrix for clustering."""
-        cd4_col = self._locate_marker_column(dataframe, "CD4")
-        cd8_col = self._locate_marker_column(dataframe, "CD8")
-        
         feature_columns = []
-        if cd4_col in dataframe.columns:
-            feature_columns.append(cd4_col)
-        if cd8_col in dataframe.columns:
-            feature_columns.append(cd8_col)
         
-        if self.include_activation_marker:
-            activation_col = self._locate_marker_column(dataframe, "HLA-DR")
-            if activation_col in dataframe.columns:
-                feature_columns.append(activation_col)
+        for marker in self.selected_markers:
+            marker_col = self._locate_marker_column(dataframe, marker)
+            if marker_col in dataframe.columns:
+                feature_columns.append(marker_col)
+            else:
+                logger.warning(f"Marker {marker} not found in data columns")
         
         if not feature_columns:
             raise ValueError("No feature columns located")

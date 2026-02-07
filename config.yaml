@@ -6,24 +6,36 @@ data:
   mixed_training: "data/mixed_training/"
   mixed_test: "data/mixed/"
 
-# Markers to use from FCS files
+# Markers to use from FCS files - FlowCap II Dendritic Cell Cytokine Data
 markers:
-  primary: ["CD4", "CD8"]
-  secondary: ["CD3", "HLA-DR", "CD45RA", "CD45RO"]
+  primary: ["IFNa", "CD123", "MHCII", "CD14", "CD11c", "IL6", "IL12", "TNFa"]
+  # Selected markers for state space (most informative for dendritic cell activation)
+  selected_for_state: ["CD123", "IFNa", "IL12"]
   # Which markers to use for clustering (defaults to primary)
-  use_for_clustering: ["CD4", "CD8"]
+  use_for_clustering: ["CD123", "IFNa", "IL12"]
 
-# Discretization bins (clinically-informed thresholds)
+# FCS Loader configuration
+fcs_loader:
+  markers: ["IFNa", "CD123", "MHCII", "CD14", "CD11c", "IL6", "IL12", "TNFa"]
+  compensation: false  # Data is already compensated (APPLY COMPENSATION: TRUE in metadata)
+  transform: true  # Apply asinh transformation
+
+# Discretization bins for dendritic cell markers and cytokines
 discretization:
-  # WHO HIV staging criteria for CD4 counts (cells/μL)
-  # Note: 999999 is used as practical upper bound (effectively infinity for cell counts)
-  cd4_bins: [0, 200, 350, 500, 999999]
+  # Binning method: "quantile" for data-driven bins or "fixed" for predefined thresholds
+  method: "quantile"
+  n_bins: 4
   
-  # Clinical significance of CD4/CD8 ratio
-  cd4_cd8_ratio_bins: [0, 1.0, 1.5, 2.5, 999999]
+  # Selected markers for state encoding (most informative for dendritic cell analysis)
+  selected_markers: ["CD123", "IFNa", "IL12"]
   
-  # HLA-DR activation levels (MFI or count)
-  activation_bins: [0, 500, 1500, 3000, 999999]
+  # Fixed fluorescence intensity bins (used when method="fixed")
+  # Cytokine bins (IFNa, IL6, IL12, TNFa) - fluorescence intensity
+  # Note: Use very large number (999999) as practical upper bound
+  cytokine_bins: [0, 100, 500, 2000, 999999]
+  
+  # Dendritic cell marker bins (CD123, MHCII, CD14, CD11c) - fluorescence intensity
+  dendritic_bins: [0, 500, 1500, 5000, 999999]
   
 # Q-learning parameters
 q_learning:

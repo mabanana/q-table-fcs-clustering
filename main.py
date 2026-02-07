@@ -60,17 +60,28 @@ def initialize_components(config: dict, use_gpu: bool = True):
     markers_config = config['markers']
     q_config = config['q_learning']
     disc_config = config['discretization']
+    fcs_config = config.get('fcs_loader', {})
     
-    # Initialize FCS loader
-    primary_markers = markers_config.get('use_for_clustering', markers_config['primary'])
-    fcs_loader = FCSLoader(markers=primary_markers)
-    logger.info(f"FCS Loader initialized with markers: {primary_markers}")
+    # Initialize FCS loader with updated configuration
+    fcs_markers = fcs_config.get('markers', markers_config.get('primary'))
+    fcs_compensation = fcs_config.get('compensation', False)
+    fcs_transform = fcs_config.get('transform', True)
     
-    # Initialize discretizer
+    fcs_loader = FCSLoader(
+        markers=fcs_markers,
+        compensation=fcs_compensation,
+        transform=fcs_transform
+    )
+    logger.info(f"FCS Loader initialized with markers: {fcs_markers}")
+    logger.info(f"Compensation: {fcs_compensation}, Transform: {fcs_transform}")
+    
+    # Initialize discretizer with new configuration
     discretizer = ClinicalDiscretizer(
-        cd4_bins=disc_config['cd4_bins'],
-        cd4_cd8_ratio_bins=disc_config['cd4_cd8_ratio_bins'],
-        activation_bins=disc_config['activation_bins']
+        method=disc_config.get('method', 'quantile'),
+        n_bins=disc_config.get('n_bins', 4),
+        selected_markers=disc_config.get('selected_markers', ['CD123', 'IFNa', 'IL12']),
+        cytokine_bins=disc_config.get('cytokine_bins'),
+        dendritic_bins=disc_config.get('dendritic_bins')
     )
     logger.info("Clinical Discretizer initialized")
     logger.info("\n" + discretizer.explain_discretization())
@@ -86,9 +97,12 @@ def initialize_components(config: dict, use_gpu: bool = True):
     action_space = create_action_space(min_clusters, max_clusters)
     n_actions = len(action_space)
     
-    # Determine number of states (2 or 3 features, 4 bins each)
-    use_activation = 'HLA-DR' in markers_config.get('secondary', [])
-    n_states = 64 if use_activation else 16
+    # Determine number of states based on selected markers
+    # With quantile-based binning: n_markers features, n_bins per feature
+    selected_markers = disc_config.get('selected_markers', ['CD123', 'IFNa', 'IL12'])
+    n_bins = disc_config.get('n_bins', 4)
+    n_markers = len(selected_markers)
+    n_states = n_bins ** n_markers  # e.g., 4^3 = 64 states for 3 markers
     
     # Initialize Q-learning agent
     q_agent = QLearningAgent(
@@ -100,7 +114,7 @@ def initialize_components(config: dict, use_gpu: bool = True):
         epsilon_end=q_config['epsilon_end'],
         epsilon_decay=q_config['epsilon_decay']
     )
-    logger.info(f"Q-Learning Agent initialized: {n_states} states, {n_actions} actions")
+    logger.info(f"Q-Learning Agent initialized: {n_states} states ({n_markers} markers × {n_bins} bins), {n_actions} actions")
     
     # Initialize trainer
     trainer = ReinforcementClusteringPipeline(
@@ -109,7 +123,7 @@ def initialize_components(config: dict, use_gpu: bool = True):
         discretizer=discretizer,
         fcs_loader=fcs_loader,
         clustering_engine=clustering_engine,
-        use_activation=use_activation
+        selected_markers=selected_markers
     )
     
     return trainer, q_agent, action_space, discretizer
