@@ -1,26 +1,30 @@
-# Q-Learning FCS Clustering System for HIV Diagnosis
+# Q-Learning FCS Clustering System for Dendritic Cell Analysis
 
-A reinforcement learning approach to automated HIV status diagnosis using flow cytometry data. This project demonstrates the application of Q-learning to medical diagnostics through clinically-informed feature discretization and two-phase progressive training.
+A reinforcement learning approach to automated analysis of dendritic cell activation and cytokine production using flow cytometry data. This project demonstrates the application of Q-learning to immunology research through data-driven feature discretization and two-phase progressive training.
 
 ## 🎯 Project Overview
 
-This system uses Q-learning (a reinforcement learning algorithm) to learn optimal clustering strategies for HIV diagnosis based on flow cytometry standard (FCS) data. The approach is unique in that it:
+This system uses Q-learning (a reinforcement learning algorithm) to learn optimal clustering strategies for analyzing dendritic cell responses based on flow cytometry standard (FCS) data. The approach is unique in that it:
 
-1. **Uses clinically-informed discretization**: Feature bins are based on WHO HIV staging criteria rather than arbitrary quantiles
+1. **Uses data-driven discretization**: Feature bins are based on quantiles or fixed fluorescence intensity thresholds
 2. **Employs two-phase progressive training**: 
-   - Phase 1: Quality optimization on HIV+ samples only
+   - Phase 1: Quality optimization on homogeneous samples
    - Phase 2: Diagnostic refinement on labeled mixed samples
 3. **Supports GPU acceleration**: Can use RAPIDS cuML for faster clustering on compatible GPUs
 4. **Provides comprehensive visualizations**: Ideal for science fair presentations and educational purposes
 
 ## 🔬 Scientific Motivation
 
-Flow cytometry measures cell surface markers (CD4, CD8, CD3, HLA-DR, etc.) that are crucial for immune system health. HIV specifically attacks CD4+ T cells, leading to:
-- **Decreased CD4 counts**: WHO uses CD4 thresholds to stage HIV disease
-- **Inverted CD4/CD8 ratio**: Healthy individuals have ratios >1.0; HIV patients often <1.0
-- **Immune activation**: Markers like HLA-DR indicate chronic immune activation
+Flow cytometry measures cell surface markers and intracellular cytokines that are crucial for understanding immune responses. This system analyzes **FlowCap II dendritic cell data** measuring:
 
-Traditional diagnosis uses fixed thresholds, but this system learns optimal clustering strategies through reinforcement learning.
+- **Dendritic cell markers**: CD123 (pDC marker), MHCII, CD14, CD11c
+- **Cytokine production**: IFNa (antiviral), IL6, IL12 (Th1 response), TNFa
+
+The experiment tests dendritic cell responses to different TLR agonists (CPG, PIC, PG, R848, LPS, PAM) vs unstimulated conditions, comparing:
+- **HEU** (HIV-exposed uninfected) vs **UE** (unexposed) populations
+- Classification based on innate immune activation patterns
+
+Traditional analysis uses manual gating, but this system learns optimal clustering strategies through reinforcement learning.
 
 ## 📋 Requirements
 
@@ -78,13 +82,13 @@ Place your FCS files in the appropriate directories:
 
 ```
 data/
-├── positive/           # HIV+ samples for Phase 1 training
-│   ├── patient001.fcs
-│   ├── patient002.fcs
+├── positive/           # Homogeneous samples (e.g., stimulated) for Phase 1 training
+│   ├── sample001.fcs
+│   ├── sample002.fcs
 │   └── ...
 ├── mixed_training/     # Labeled mixed samples for Phase 2
-│   ├── patient010_positive.fcs
-│   ├── patient011_negative.fcs
+│   ├── sample010_positive.fcs
+│   ├── sample011_negative.fcs
 │   └── ...
 └── mixed/             # Unlabeled samples for testing
     ├── sample001.fcs
@@ -92,7 +96,10 @@ data/
     └── ...
 ```
 
-**Important**: For labeled training data (Phase 2), filenames must contain "positive" or "negative" to indicate HIV status.
+**Important**: 
+- For labeled training data (Phase 2), filenames must contain "positive" or "negative" to indicate classification labels
+- FCS files should contain dendritic cell markers: IFNa, CD123, MHCII, CD14, CD11c, IL6, IL12, TNFa
+- Compensation should already be applied (metadata: `APPLY COMPENSATION: TRUE`)
 
 ## 🎮 Usage
 
@@ -106,7 +113,7 @@ python main.py --train-full --episodes 2000 --use-gpu
 
 ### Phase-by-Phase Training
 
-**Phase 1 Only** (Quality learning on HIV+ data):
+**Phase 1 Only** (Quality learning on homogeneous data):
 ```bash
 python main.py --train-phase1 --episodes 1000
 ```
@@ -162,9 +169,21 @@ data:
 ### Clinical Discretization Thresholds
 ```yaml
 discretization:
-  cd4_bins: [0, 200, 350, 500, 999999]  # WHO HIV staging
-  cd4_cd8_ratio_bins: [0, 1.0, 1.5, 2.5, 999999]
-  activation_bins: [0, 500, 1500, 3000, 999999]
+  method: "quantile"  # or "fixed"
+  n_bins: 4
+  selected_markers: ["CD123", "IFNa", "IL12"]
+  
+  # For fixed method:
+  cytokine_bins: [0, 100, 500, 2000, 999999]
+  dendritic_bins: [0, 500, 1500, 5000, 999999]
+```
+
+### FCS Loader Settings
+```yaml
+fcs_loader:
+  markers: ["IFNa", "CD123", "MHCII", "CD14", "CD11c", "IL6", "IL12", "TNFa"]
+  compensation: false  # Already applied in raw data
+  transform: true
 ```
 
 ### Q-Learning Parameters
@@ -188,33 +207,36 @@ training:
 
 ## 🧠 How It Works
 
-### 1. Clinically-Informed Discretization
+### 1. Data-Driven Discretization
 
-Continuous flow cytometry measurements are discretized into bins based on clinical criteria:
+Continuous flow cytometry measurements are discretized into bins using one of two methods:
 
-**CD4 Count** (WHO HIV Staging):
-- Bin 0: <200 cells/μL (Severe immunodeficiency)
-- Bin 1: 200-350 (Advanced immunodeficiency)
-- Bin 2: 350-500 (Mild immunodeficiency)
-- Bin 3: >500 (Normal)
+**Quantile-Based Binning** (data-driven, default):
+- Each marker is divided into bins based on data quantiles
+- Adapts to actual distribution of fluorescence intensities
+- Ensures balanced representation across all intensity levels
 
-**CD4/CD8 Ratio** (Clinical Significance):
-- Bin 0: <1.0 (Inverted - immunocompromised)
-- Bin 1: 1.0-1.5 (Low)
-- Bin 2: 1.5-2.5 (Normal)
-- Bin 3: >2.5 (High)
+**Fixed Intensity Binning**:
 
-**Activation Markers** (HLA-DR):
-- Bin 0: <500 (Low)
-- Bin 1: 500-1500 (Moderate)
-- Bin 2: 1500-3000 (High)
-- Bin 3: >3000 (Very high)
+**Dendritic Cell Markers** (CD123, MHCII, CD14, CD11c):
+- Bin 0: 0-500 (Low)
+- Bin 1: 500-1500 (Medium)
+- Bin 2: 1500-5000 (High)
+- Bin 3: >5000 (Very High)
+
+**Cytokines** (IFNa, IL6, IL12, TNFa):
+- Bin 0: 0-100 (Low)
+- Bin 1: 100-500 (Medium)
+- Bin 2: 500-2000 (High)
+- Bin 3: >2000 (Very High)
 
 ### 2. State Space
 
-States encode discretized feature combinations:
-- **2 features** (CD4 + CD4/CD8): 4×4 = 16 states
-- **3 features** (+ activation): 4×4×4 = 64 states
+States encode discretized marker combinations:
+- **3 markers** (CD123, IFNa, IL12): 4×4×4 = 64 states
+- **2 markers**: 4×4 = 16 states
+
+Selected markers represent the most informative features for dendritic cell activation analysis.
 
 ### 3. Action Space
 
@@ -242,14 +264,14 @@ Where:
 ### 5. Two-Phase Progressive Training
 
 **Phase 1: Quality Optimization**
-- Data: HIV+ samples only
+- Data: Homogeneous samples (e.g., stimulated cells)
 - Objective: Learn cluster counts that maximize silhouette score
 - Reward: Silhouette score (cluster quality metric)
-- Purpose: Understand structure of positive samples
+- Purpose: Understand structure of response patterns
 
 **Phase 2: Diagnostic Refinement**
-- Data: Mixed labeled samples (HIV+ and HIV-)
-- Objective: Fine-tune for diagnostic accuracy
+- Data: Mixed labeled samples (different conditions or populations)
+- Objective: Fine-tune for classification accuracy
 - Reward: F1-score or Matthews Correlation Coefficient
 - Purpose: Optimize cluster-to-diagnosis mapping
 
@@ -291,7 +313,7 @@ output/
 - `encoded_state`: Discrete state representation
 - `selected_cluster_count`: Chosen k value
 - `assigned_cluster`: Which cluster the sample belongs to
-- `predicted_hiv_status`: "positive" or "negative"
+- `predicted_hiv_status`: Classification result ("positive" or "negative")
 
 ## 🧪 Testing
 
@@ -321,7 +343,7 @@ pytest tests/ --cov=src --cov-report=html
 **Solution**: Either install RAPIDS cuML or remove `--use-gpu` flag (will use CPU)
 
 ### Problem: "No labeled data found"
-**Solution**: For Phase 2, filenames must contain "positive" or "negative"
+**Solution**: For Phase 2, filenames must contain "positive" or "negative" to indicate classification labels
 
 ### Problem: Poor performance
 **Solutions**:
@@ -335,24 +357,24 @@ pytest tests/ --cov=src --cov-report=html
 
 ## 🎓 Science Fair Presentation Tips
 
-1. **Explain the Clinical Context**: Start with why HIV diagnosis matters and what flow cytometry measures
+1. **Explain the Biological Context**: Start with dendritic cells as sentinels of the immune system and their role in detecting pathogens
 
 2. **Demonstrate Reinforcement Learning**: Use visualizations to show how the Q-table evolves during training
 
-3. **Highlight Innovation**: Emphasize clinically-informed discretization vs. arbitrary binning
+3. **Highlight Innovation**: Emphasize data-driven discretization (quantiles) vs. arbitrary binning, and the two-phase learning approach
 
-4. **Show Results**: Display learning curves, confusion matrices, and example predictions
+4. **Show Results**: Display learning curves, cluster quality metrics, and example predictions
 
 5. **Discuss Trade-offs**: Simplicity (discretization) vs. accuracy, exploration vs. exploitation
 
-6. **Future Work**: Mention potential improvements (deep Q-learning, more markers, larger datasets)
+6. **Future Work**: Mention potential improvements (deep Q-learning, more markers, larger datasets, integration with manual gating)
 
 ## 📚 References
 
 ### Scientific Background
-1. **WHO HIV Staging**: [WHO Guidelines](https://www.who.int/hiv/pub/guidelines/HIVstaging150307.pdf)
-2. **Flow Cytometry**: Understanding immune cell populations
-3. **FlowCAP Challenge**: Community benchmark for flow cytometry analysis
+1. **FlowCap Challenge**: Community benchmark for flow cytometry analysis - http://flowcap.flowsite.org/
+2. **Dendritic Cells**: Understanding immune cell populations and activation
+3. **Cytokine Profiling**: Measuring immune responses through cytokine production
 
 ### Technical References
 1. **Q-Learning**: Watkins & Dayan (1992) - "Q-learning"
@@ -373,10 +395,9 @@ For questions about this project, please open a GitHub issue.
 
 ## 🙏 Acknowledgments
 
-- WHO for HIV staging criteria
+- FlowCap community for flow cytometry benchmarks and datasets
 - ISAC for FCS standard specification
 - RAPIDS team for cuML GPU acceleration
-- FlowCAP community for flow cytometry benchmarks
 
 ---
 
