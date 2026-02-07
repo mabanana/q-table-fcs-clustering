@@ -52,7 +52,7 @@ def load_configuration(config_path: str = "config.yaml") -> dict:
     return config
 
 
-def initialize_components(config: dict, use_gpu: bool = True):
+def initialize_components(config: dict, use_gpu: bool = True, compensation_path: str = None):
     """Initialize all system components."""
     logger = logging.getLogger(__name__)
     
@@ -61,10 +61,19 @@ def initialize_components(config: dict, use_gpu: bool = True):
     q_config = config['q_learning']
     disc_config = config['discretization']
     
-    # Initialize FCS loader
+    # Initialize FCS loader with optional compensation
     primary_markers = markers_config.get('use_for_clustering', markers_config['primary'])
-    fcs_loader = FCSLoader(markers=primary_markers)
-    logger.info(f"FCS Loader initialized with markers: {primary_markers}")
+    
+    if compensation_path and os.path.exists(compensation_path):
+        logger.info(f"Loading compensation matrix from: {compensation_path}")
+        fcs_loader = FCSLoader.from_compensation_file(
+            compensation_csv=compensation_path,
+            markers=primary_markers
+        )
+        logger.info("FCS Loader initialized WITH compensation support")
+    else:
+        fcs_loader = FCSLoader(markers=primary_markers)
+        logger.info("FCS Loader initialized WITHOUT compensation")
     
     # Initialize discretizer
     discretizer = ClinicalDiscretizer(
@@ -305,6 +314,10 @@ Examples:
                              help='Attempt to use GPU acceleration')
     config_group.add_argument('--q-table', type=str, default='output/q_table.pkl',
                              help='Path to Q-table file for save/load')
+    config_group.add_argument('--compensation', type=str,
+                             help='Path to compensation matrix CSV (optional)')
+    config_group.add_argument('--apply-compensation', action='store_true',
+                             help='Apply compensation during data loading (requires --compensation)')
     
     # I/O options
     io_group = parser.add_argument_group('Input/Output')
@@ -338,7 +351,8 @@ Examples:
     try:
         trainer, q_agent, action_space, discretizer = initialize_components(
             config,
-            use_gpu=args.use_gpu
+            use_gpu=args.use_gpu,
+            compensation_path=args.compensation if args.apply_compensation else None
         )
     except Exception as e:
         logger.error(f"Failed to initialize components: {str(e)}")
