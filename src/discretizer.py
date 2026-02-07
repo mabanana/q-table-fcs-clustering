@@ -2,7 +2,7 @@
 Clinically-Informed Discretizer Module
 
 Implements discretization of continuous flow cytometry data into discrete bins
-based on clinically relevant thresholds (WHO HIV staging criteria, etc.).
+for dendritic cell markers and cytokines (FlowCap II dataset).
 """
 
 import logging
@@ -15,235 +15,215 @@ logger = logging.getLogger(__name__)
 
 class ClinicalDiscretizer:
     """
-    Discretizes continuous flow cytometry data into clinically-informed bins.
+    Discretizes continuous flow cytometry data for dendritic cell and cytokine markers.
     
-    Based on:
-    - WHO HIV staging criteria for CD4 counts
-    - Clinical significance of CD4/CD8 ratios
-    - Activation marker thresholds
+    Supports two discretization methods:
+    - Quantile-based: Data-driven bins using quantiles (adaptive to data distribution)
+    - Fixed: Predefined fluorescence intensity thresholds
     """
     
-    # Default bin boundaries based on clinical criteria
-    DEFAULT_CD4_BINS = [0, 200, 350, 500, np.inf]
-    DEFAULT_CD4_CD8_RATIO_BINS = [0, 1.0, 1.5, 2.5, np.inf]
-    DEFAULT_ACTIVATION_BINS = [0, 500, 1500, 3000, np.inf]
+    # Default bin boundaries for fixed method (fluorescence intensity)
+    DEFAULT_CYTOKINE_BINS = [0, 100, 500, 2000, np.inf]
+    DEFAULT_DENDRITIC_BINS = [0, 500, 1500, 5000, np.inf]
     
-    # Clinical interpretations for each bin
-    CD4_INTERPRETATIONS = [
-        "Severe immunodeficiency (<200)",
-        "Advanced immunodeficiency (200-350)",
-        "Mild immunodeficiency (350-500)",
-        "Normal (>500)"
-    ]
-    
-    CD4_CD8_RATIO_INTERPRETATIONS = [
-        "Inverted - immunocompromised (<1.0)",
-        "Low (1.0-1.5)",
-        "Normal (1.5-2.5)",
-        "High (>2.5)"
-    ]
-    
-    ACTIVATION_INTERPRETATIONS = [
-        "Low activation (<500)",
-        "Moderate activation (500-1500)",
-        "High activation (1500-3000)",
-        "Very high activation (>3000)"
-    ]
+    # Marker type classification
+    CYTOKINE_MARKERS = ['IFNa', 'IL6', 'IL12', 'TNFa']
+    DENDRITIC_MARKERS = ['CD123', 'MHCII', 'CD14', 'CD11c']
     
     def __init__(
         self,
-        cd4_bins: Optional[List[float]] = None,
-        cd4_cd8_ratio_bins: Optional[List[float]] = None,
-        activation_bins: Optional[List[float]] = None
+        method: str = "quantile",
+        n_bins: int = 4,
+        selected_markers: Optional[List[str]] = None,
+        cytokine_bins: Optional[List[float]] = None,
+        dendritic_bins: Optional[List[float]] = None
     ):
         """
-        Initialize the discretizer with custom or default bin boundaries.
+        Initialize the discretizer for dendritic cell/cytokine data.
         
         Args:
-            cd4_bins: Bin boundaries for CD4 counts (default: WHO criteria)
-            cd4_cd8_ratio_bins: Bin boundaries for CD4/CD8 ratio
-            activation_bins: Bin boundaries for activation markers (e.g., HLA-DR)
+            method: Discretization method ("quantile" or "fixed")
+            n_bins: Number of bins for quantile method (default: 4)
+            selected_markers: Markers to use for state encoding (default: ["CD123", "IFNa", "IL12"])
+            cytokine_bins: Bin boundaries for cytokines (used with fixed method)
+            dendritic_bins: Bin boundaries for dendritic markers (used with fixed method)
         """
-        self.cd4_bins = cd4_bins or self.DEFAULT_CD4_BINS
-        self.cd4_cd8_ratio_bins = cd4_cd8_ratio_bins or self.DEFAULT_CD4_CD8_RATIO_BINS
-        self.activation_bins = activation_bins or self.DEFAULT_ACTIVATION_BINS
+        self.method = method
+        self.n_bins = n_bins
+        self.selected_markers = selected_markers or ["CD123", "IFNa", "IL12"]
+        self.cytokine_bins = cytokine_bins or self.DEFAULT_CYTOKINE_BINS
+        self.dendritic_bins = dendritic_bins or self.DEFAULT_DENDRITIC_BINS
+        
+        # Store computed quantile bins (will be calculated from data)
+        self.quantile_bins_cache = {}
         
         logger.info("Initialized ClinicalDiscretizer with:")
-        logger.info(f"  CD4 bins: {self.cd4_bins}")
-        logger.info(f"  CD4/CD8 ratio bins: {self.cd4_cd8_ratio_bins}")
-        logger.info(f"  Activation bins: {self.activation_bins}")
+        logger.info(f"  Method: {self.method}")
+        logger.info(f"  Number of bins: {self.n_bins}")
+        logger.info(f"  Selected markers for state: {self.selected_markers}")
+        if method == "fixed":
+            logger.info(f"  Cytokine bins: {self.cytokine_bins}")
+            logger.info(f"  Dendritic bins: {self.dendritic_bins}")
     
-    def discretize_cd4(self, cd4_values: np.ndarray) -> np.ndarray:
+    def discretize_marker_quantile(self, values: np.ndarray, marker_name: str) -> np.ndarray:
         """
-        Discretize CD4 counts into bins based on WHO HIV staging criteria.
-        
-        Bins:
-        - 0: <200 (Severe immunodeficiency)
-        - 1: 200-350 (Advanced immunodeficiency)
-        - 2: 350-500 (Mild immunodeficiency)
-        - 3: >500 (Normal)
+        Discretize marker values using quantile-based binning.
         
         Args:
-            cd4_values: Array of CD4 count values
+            values: Array of marker values
+            marker_name: Name of the marker (for caching)
             
         Returns:
-            Array of bin indices (0-3)
+            Array of bin indices (0 to n_bins-1)
         """
-        return np.digitize(cd4_values, self.cd4_bins[1:], right=False)
-    
-    def discretize_cd4_cd8_ratio(self, ratio_values: np.ndarray) -> np.ndarray:
-        """
-        Discretize CD4/CD8 ratio into bins based on clinical significance.
+        # Calculate quantile boundaries
+        quantiles = np.linspace(0, 1, self.n_bins + 1)
+        bins = np.quantile(values, quantiles)
         
-        Bins:
-        - 0: <1.0 (Inverted - immunocompromised)
-        - 1: 1.0-1.5 (Low)
-        - 2: 1.5-2.5 (Normal)
-        - 3: >2.5 (High)
+        # Handle edge case where all values are the same
+        if len(np.unique(bins)) == 1:
+            return np.zeros(len(values), dtype=int)
+        
+        # Store bins for later reference
+        self.quantile_bins_cache[marker_name] = bins
+        
+        # Digitize values into bins (bins are inclusive on the left, exclusive on the right)
+        discretized = np.digitize(values, bins[1:-1], right=False)
+        
+        return discretized
+    
+    def discretize_marker_fixed(self, values: np.ndarray, marker_name: str) -> np.ndarray:
+        """
+        Discretize marker values using fixed fluorescence intensity thresholds.
         
         Args:
-            ratio_values: Array of CD4/CD8 ratio values
+            values: Array of marker values
+            marker_name: Name of the marker
             
         Returns:
-            Array of bin indices (0-3)
+            Array of bin indices (0 to 3)
         """
-        return np.digitize(ratio_values, self.cd4_cd8_ratio_bins[1:], right=False)
-    
-    def discretize_activation(self, activation_values: np.ndarray) -> np.ndarray:
-        """
-        Discretize activation marker values (e.g., HLA-DR) into bins.
+        # Determine which bin set to use based on marker type
+        if marker_name in self.CYTOKINE_MARKERS:
+            bins = self.cytokine_bins
+        elif marker_name in self.DENDRITIC_MARKERS:
+            bins = self.dendritic_bins
+        else:
+            # Default to dendritic bins for unknown markers
+            bins = self.dendritic_bins
         
-        Bins:
-        - 0: <500 (Low)
-        - 1: 500-1500 (Moderate)
-        - 2: 1500-3000 (High)
-        - 3: >3000 (Very high)
+        return np.digitize(values, bins[1:], right=False)
+    
+    def discretize_marker(self, values: np.ndarray, marker_name: str) -> np.ndarray:
+        """
+        Discretize marker values based on configured method.
         
         Args:
-            activation_values: Array of activation marker values
+            values: Array of marker values
+            marker_name: Name of the marker
             
         Returns:
-            Array of bin indices (0-3)
+            Array of bin indices
         """
-        return np.digitize(activation_values, self.activation_bins[1:], right=False)
+        if self.method == "quantile":
+            return self.discretize_marker_quantile(values, marker_name)
+        elif self.method == "fixed":
+            return self.discretize_marker_fixed(values, marker_name)
+        else:
+            raise ValueError(f"Unknown discretization method: {self.method}")
     
     def discretize_data(
         self,
         data: pd.DataFrame,
-        cd4_column: str = "CD4",
-        cd8_column: str = "CD8",
-        activation_column: Optional[str] = None
+        markers: Optional[List[str]] = None
     ) -> pd.DataFrame:
         """
-        Discretize all relevant features in a DataFrame.
+        Discretize all relevant markers in a DataFrame.
         
         Args:
             data: DataFrame containing flow cytometry data
-            cd4_column: Name of CD4 column
-            cd8_column: Name of CD8 column
-            activation_column: Optional name of activation marker column (e.g., HLA-DR)
+            markers: List of marker names to discretize (defaults to all available)
             
         Returns:
-            DataFrame with discretized features added
+            DataFrame with discretized features added as *_bin columns
         """
         result = data.copy()
         
-        # Discretize CD4
-        if cd4_column in result.columns:
-            result['cd4_bin'] = self.discretize_cd4(result[cd4_column].values)
-            logger.debug(f"Discretized {cd4_column} into cd4_bin")
-        else:
-            logger.warning(f"Column {cd4_column} not found in data")
+        # Use provided markers or detect from dataframe
+        if markers is None:
+            # Detect available markers from columns
+            markers = []
+            all_known_markers = self.CYTOKINE_MARKERS + self.DENDRITIC_MARKERS
+            for marker in all_known_markers:
+                if marker in result.columns:
+                    markers.append(marker)
         
-        # Calculate and discretize CD4/CD8 ratio
-        if cd4_column in result.columns and cd8_column in result.columns:
-            # Avoid division by zero
-            cd8_safe = result[cd8_column].replace(0, 1e-10)
-            result['cd4_cd8_ratio'] = result[cd4_column] / cd8_safe
-            result['cd4_cd8_ratio_bin'] = self.discretize_cd4_cd8_ratio(
-                result['cd4_cd8_ratio'].values
-            )
-            logger.debug(f"Calculated and discretized CD4/CD8 ratio")
-        else:
-            logger.warning(f"Columns {cd4_column} or {cd8_column} not found in data")
-        
-        # Discretize activation marker if available
-        if activation_column and activation_column in result.columns:
-            result['activation_bin'] = self.discretize_activation(
-                result[activation_column].values
-            )
-            logger.debug(f"Discretized {activation_column} into activation_bin")
+        # Discretize each marker
+        for marker in markers:
+            if marker in result.columns:
+                bin_col_name = f"{marker}_bin"
+                result[bin_col_name] = self.discretize_marker(
+                    result[marker].values, marker
+                )
+                logger.debug(f"Discretized {marker} into {bin_col_name}")
+            else:
+                logger.warning(f"Marker {marker} not found in data columns")
         
         return result
     
-    def create_state(
-        self,
-        cd4_bin: int,
-        cd4_cd8_ratio_bin: int,
-        activation_bin: Optional[int] = None
-    ) -> int:
+    def create_state(self, marker_bins: Dict[str, int]) -> int:
         """
-        Create a discrete state representation from bin indices.
+        Create a discrete state representation from marker bin indices.
         
-        State encoding:
-        - 2 features (CD4, CD4/CD8 ratio): state = cd4_bin * 4 + cd4_cd8_ratio_bin
-        - 3 features (+ activation): state = cd4_bin * 16 + cd4_cd8_ratio_bin * 4 + activation_bin
+        State encoding uses base-n_bins encoding where n_bins is typically 4.
+        For selected markers [M1, M2, M3] with bins [b1, b2, b3]:
+        state = b1 * (n_bins^2) + b2 * (n_bins^1) + b3 * (n_bins^0)
         
         Args:
-            cd4_bin: CD4 bin index (0-3)
-            cd4_cd8_ratio_bin: CD4/CD8 ratio bin index (0-3)
-            activation_bin: Optional activation marker bin index (0-3)
+            marker_bins: Dictionary mapping marker names to bin indices
             
         Returns:
             Integer state representation
         """
-        if activation_bin is not None:
-            # 3 features: 4^3 = 64 possible states
-            state = cd4_bin * 16 + cd4_cd8_ratio_bin * 4 + activation_bin
-        else:
-            # 2 features: 4^2 = 16 possible states
-            state = cd4_bin * 4 + cd4_cd8_ratio_bin
+        state = 0
+        multiplier = 1
+        
+        # Encode in reverse order (rightmost marker is least significant)
+        for marker in reversed(self.selected_markers):
+            bin_idx = marker_bins.get(marker, 0)
+            state += bin_idx * multiplier
+            multiplier *= self.n_bins
         
         return state
     
-    def decode_state(
-        self,
-        state: int,
-        num_features: int = 2
-    ) -> Tuple[int, int, Optional[int]]:
+    def decode_state(self, state: int) -> Dict[str, int]:
         """
-        Decode a state representation back into bin indices.
+        Decode a state representation back into marker bin indices.
         
         Args:
             state: Integer state representation
-            num_features: Number of features (2 or 3)
             
         Returns:
-            Tuple of (cd4_bin, cd4_cd8_ratio_bin, activation_bin)
-            activation_bin is None for 2-feature encoding
+            Dictionary mapping marker names to bin indices
         """
-        if num_features == 3:
-            cd4_bin = state // 16
-            remainder = state % 16
-            cd4_cd8_ratio_bin = remainder // 4
-            activation_bin = remainder % 4
-            return cd4_bin, cd4_cd8_ratio_bin, activation_bin
-        else:
-            cd4_bin = state // 4
-            cd4_cd8_ratio_bin = state % 4
-            return cd4_bin, cd4_cd8_ratio_bin, None
+        marker_bins = {}
+        
+        for marker in reversed(self.selected_markers):
+            bin_idx = state % self.n_bins
+            marker_bins[marker] = bin_idx
+            state //= self.n_bins
+        
+        return marker_bins
     
     def get_state_from_data(
         self,
-        data: pd.DataFrame,
-        use_activation: bool = False
+        data: pd.DataFrame
     ) -> np.ndarray:
         """
         Convert discretized data to state representations.
         
         Args:
-            data: DataFrame with discretized features (cd4_bin, cd4_cd8_ratio_bin, etc.)
-            use_activation: Whether to include activation marker in state
+            data: DataFrame with discretized features (*_bin columns)
             
         Returns:
             Array of state representations
@@ -251,50 +231,67 @@ class ClinicalDiscretizer:
         states = []
         
         for idx, row in data.iterrows():
-            cd4_bin = int(row.get('cd4_bin', 0))
-            cd4_cd8_ratio_bin = int(row.get('cd4_cd8_ratio_bin', 0))
+            marker_bins = {}
+            for marker in self.selected_markers:
+                bin_col = f"{marker}_bin"
+                if bin_col in row:
+                    marker_bins[marker] = int(row[bin_col])
+                else:
+                    logger.warning(f"Bin column {bin_col} not found, using 0")
+                    marker_bins[marker] = 0
             
-            if use_activation and 'activation_bin' in row:
-                activation_bin = int(row['activation_bin'])
-            else:
-                activation_bin = None
-            
-            state = self.create_state(cd4_bin, cd4_cd8_ratio_bin, activation_bin)
+            state = self.create_state(marker_bins)
             states.append(state)
         
         return np.array(states)
     
-    def get_clinical_interpretation(
-        self,
-        cd4_bin: int,
-        cd4_cd8_ratio_bin: int,
-        activation_bin: Optional[int] = None
-    ) -> str:
+    def get_marker_interpretation(self, marker: str, bin_idx: int) -> str:
         """
-        Get clinical interpretation for a given bin combination.
+        Get interpretation for a marker bin.
         
         Args:
-            cd4_bin: CD4 bin index
-            cd4_cd8_ratio_bin: CD4/CD8 ratio bin index
-            activation_bin: Optional activation marker bin index
+            marker: Marker name
+            bin_idx: Bin index
+            
+        Returns:
+            Human-readable interpretation
+        """
+        if self.method == "quantile":
+            if marker in self.quantile_bins_cache:
+                bins = self.quantile_bins_cache[marker]
+                if bin_idx < len(bins) - 1:
+                    return f"[{bins[bin_idx]:.1f}, {bins[bin_idx+1]:.1f})"
+            return f"Bin {bin_idx}"
+        else:  # fixed method
+            if marker in self.CYTOKINE_MARKERS:
+                bins = self.cytokine_bins
+                labels = ["Low", "Medium", "High", "Very High"]
+            else:
+                bins = self.dendritic_bins
+                labels = ["Low", "Medium", "High", "Very High"]
+            
+            if bin_idx < len(labels):
+                range_str = f"[{bins[bin_idx]}, {bins[bin_idx+1]})"
+                return f"{labels[bin_idx]} {range_str}"
+            return f"Bin {bin_idx}"
+    
+    def get_clinical_interpretation(self, marker_bins: Dict[str, int]) -> str:
+        """
+        Get clinical interpretation for a combination of marker bins.
+        
+        Args:
+            marker_bins: Dictionary mapping marker names to bin indices
             
         Returns:
             Human-readable clinical interpretation
         """
         interpretation_parts = []
         
-        if 0 <= cd4_bin < len(self.CD4_INTERPRETATIONS):
-            interpretation_parts.append(f"CD4: {self.CD4_INTERPRETATIONS[cd4_bin]}")
-        
-        if 0 <= cd4_cd8_ratio_bin < len(self.CD4_CD8_RATIO_INTERPRETATIONS):
-            interpretation_parts.append(
-                f"CD4/CD8 ratio: {self.CD4_CD8_RATIO_INTERPRETATIONS[cd4_cd8_ratio_bin]}"
-            )
-        
-        if activation_bin is not None and 0 <= activation_bin < len(self.ACTIVATION_INTERPRETATIONS):
-            interpretation_parts.append(
-                f"Activation: {self.ACTIVATION_INTERPRETATIONS[activation_bin]}"
-            )
+        for marker in self.selected_markers:
+            if marker in marker_bins:
+                bin_idx = marker_bins[marker]
+                interp = self.get_marker_interpretation(marker, bin_idx)
+                interpretation_parts.append(f"{marker}: {interp}")
         
         return " | ".join(interpretation_parts)
     
@@ -310,27 +307,13 @@ class ClinicalDiscretizer:
         """
         stats = {}
         
-        if 'cd4_bin' in data.columns:
-            stats['cd4_bin_counts'] = data['cd4_bin'].value_counts().to_dict()
-            stats['cd4_bin_distribution'] = (
-                data['cd4_bin'].value_counts(normalize=True).to_dict()
-            )
-        
-        if 'cd4_cd8_ratio_bin' in data.columns:
-            stats['cd4_cd8_ratio_bin_counts'] = (
-                data['cd4_cd8_ratio_bin'].value_counts().to_dict()
-            )
-            stats['cd4_cd8_ratio_bin_distribution'] = (
-                data['cd4_cd8_ratio_bin'].value_counts(normalize=True).to_dict()
-            )
-        
-        if 'activation_bin' in data.columns:
-            stats['activation_bin_counts'] = (
-                data['activation_bin'].value_counts().to_dict()
-            )
-            stats['activation_bin_distribution'] = (
-                data['activation_bin'].value_counts(normalize=True).to_dict()
-            )
+        for marker in self.selected_markers:
+            bin_col = f"{marker}_bin"
+            if bin_col in data.columns:
+                stats[f"{marker}_bin_counts"] = data[bin_col].value_counts().to_dict()
+                stats[f"{marker}_bin_distribution"] = (
+                    data[bin_col].value_counts(normalize=True).to_dict()
+                )
         
         return stats
     
@@ -339,33 +322,50 @@ class ClinicalDiscretizer:
         Generate a detailed explanation of the discretization scheme.
         
         Returns:
-            Formatted string explaining the clinical basis for bins
+            Formatted string explaining the discretization approach
         """
         explanation = []
         explanation.append("=" * 80)
-        explanation.append("CLINICALLY-INFORMED DISCRETIZATION SCHEME")
+        explanation.append("DENDRITIC CELL & CYTOKINE DISCRETIZATION SCHEME")
         explanation.append("=" * 80)
         explanation.append("")
         
-        explanation.append("CD4 COUNT BINS (WHO HIV Staging Criteria):")
-        explanation.append("-" * 80)
-        for i, interp in enumerate(self.CD4_INTERPRETATIONS):
-            bin_range = f"[{self.cd4_bins[i]}, {self.cd4_bins[i+1]})"
-            explanation.append(f"  Bin {i}: {bin_range:20s} - {interp}")
+        explanation.append(f"Discretization Method: {self.method.upper()}")
+        explanation.append(f"Number of bins: {self.n_bins}")
+        explanation.append(f"Selected markers for state space: {', '.join(self.selected_markers)}")
         explanation.append("")
         
-        explanation.append("CD4/CD8 RATIO BINS (Clinical Significance):")
-        explanation.append("-" * 80)
-        for i, interp in enumerate(self.CD4_CD8_RATIO_INTERPRETATIONS):
-            bin_range = f"[{self.cd4_cd8_ratio_bins[i]}, {self.cd4_cd8_ratio_bins[i+1]})"
-            explanation.append(f"  Bin {i}: {bin_range:20s} - {interp}")
-        explanation.append("")
+        if self.method == "quantile":
+            explanation.append("QUANTILE-BASED BINNING (Data-Driven):")
+            explanation.append("-" * 80)
+            explanation.append(f"Each marker is divided into {self.n_bins} bins based on data quantiles.")
+            explanation.append("Bins adapt to the actual distribution of fluorescence intensities.")
+            explanation.append("Ensures balanced representation across all intensity levels.")
+        else:
+            explanation.append("FIXED FLUORESCENCE INTENSITY BINS:")
+            explanation.append("-" * 80)
+            explanation.append("")
+            explanation.append("CYTOKINE MARKERS (IFNa, IL6, IL12, TNFa):")
+            for i in range(len(self.cytokine_bins) - 1):
+                lower = self.cytokine_bins[i]
+                upper = self.cytokine_bins[i + 1]
+                label = ["Low", "Medium", "High", "Very High"][i] if i < 4 else f"Bin {i}"
+                explanation.append(f"  Bin {i}: [{lower}, {upper}) - {label}")
+            explanation.append("")
+            
+            explanation.append("DENDRITIC CELL MARKERS (CD123, MHCII, CD14, CD11c):")
+            for i in range(len(self.dendritic_bins) - 1):
+                lower = self.dendritic_bins[i]
+                upper = self.dendritic_bins[i + 1]
+                label = ["Low", "Medium", "High", "Very High"][i] if i < 4 else f"Bin {i}"
+                explanation.append(f"  Bin {i}: [{lower}, {upper}) - {label}")
         
-        explanation.append("ACTIVATION MARKER BINS (HLA-DR Expression):")
+        explanation.append("")
+        explanation.append("STATE SPACE ENCODING:")
         explanation.append("-" * 80)
-        for i, interp in enumerate(self.ACTIVATION_INTERPRETATIONS):
-            bin_range = f"[{self.activation_bins[i]}, {self.activation_bins[i+1]})"
-            explanation.append(f"  Bin {i}: {bin_range:20s} - {interp}")
+        n_states = self.n_bins ** len(self.selected_markers)
+        explanation.append(f"Total states: {n_states} ({self.n_bins}^{len(self.selected_markers)} combinations)")
+        explanation.append(f"State = {' + '.join([f'{m}_bin × {self.n_bins}^{i}' for i, m in enumerate(reversed(self.selected_markers))])}")
         explanation.append("")
         
         explanation.append("=" * 80)
