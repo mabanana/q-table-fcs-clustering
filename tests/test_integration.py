@@ -164,7 +164,7 @@ class TestPreprocessingWorkflow:
             [1.0, 0.1],
             [0.05, 1.0]
         ])
-        markers = ['CD4', 'CD45']  # CD45 not in data
+        markers = ['CD4', 'CD3']  # CD3 not in data
         
         test_data = pd.DataFrame({
             'CD4': [100.0, 200.0, 300.0],
