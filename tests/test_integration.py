@@ -46,7 +46,7 @@ class TestCompensationIntegration:
         if os.path.exists(comp_file):
             loader2 = FCSLoader.from_compensation_file(
                 compensation_csv=comp_file,
-                markers=["CD4", "CD8"]
+                markers=["CD4", "CD8"]  # Explicitly pass markers
             )
             assert loader2.compensation_matrix is not None
             assert loader2.preprocessor is not None

@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 # Constants for marker matching
 MIN_MARKER_LENGTH = 3  # Minimum length for partial marker matching
+COMPENSATION_FLAG_VALUE = 'APPLIED'  # Value for $COMP metadata flag
 
 
 class CompensationMatrixLoader:
@@ -333,7 +334,7 @@ class FCSPreprocessor:
                 try:
                     # Preserve original metadata and update with compensation info
                     updated_meta = meta.copy() if preserve_metadata else {}
-                    updated_meta['$COMP'] = 'Applied'  # Mark as compensated
+                    updated_meta['$COMP'] = COMPENSATION_FLAG_VALUE  # Mark as compensated
                     updated_meta['$DATE'] = datetime.now().strftime('%d-%b-%Y')
                     
                     # Write to FCS file
@@ -406,7 +407,7 @@ class FCSPreprocessor:
             
         except Exception as e:
             logger.error(f"Fallback copy method failed: {str(e)}")
-            self.files_failed += 1
+            # Don't increment files_failed here since it will be incremented by the caller
             return False
     
     def batch_process(

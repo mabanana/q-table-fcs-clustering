@@ -22,6 +22,10 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+# Constants
+COMPENSATION_FLAG_VALUE = 'APPLIED'  # Value for $COMP metadata flag
+
+
 class FCSLoader:
     """
     Enhanced FCS file loader with compensation awareness.
@@ -110,7 +114,7 @@ class FCSLoader:
             logger.debug(f"Available channels: {list(data.columns)}")
             
             # Check if file is already compensated
-            is_compensated = meta.get('$COMP', '').upper() == 'APPLIED'
+            is_compensated = meta.get('$COMP', '').upper() == COMPENSATION_FLAG_VALUE
             
             # Apply compensation if requested and not already compensated
             if (apply_compensation and 
