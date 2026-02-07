@@ -13,6 +13,9 @@ preprocessing:
     apply: true
     matrix_file: "data/compensation/0001.csv"
     validate_markers: true
+    # Optional: Path to compensation matrix for training pipeline
+    # If specified, will be applied during data loading
+    apply_during_training: false
   
   # File routing rules
   routing:

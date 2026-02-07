@@ -8,6 +8,7 @@ for raw flow cytometry data.
 import os
 import logging
 from typing import List, Dict, Any, Optional, Tuple
+from datetime import datetime
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -25,6 +26,13 @@ try:
 except ImportError:
     FCSPARSER_AVAILABLE = False
     logging.warning("fcsparser not available. FCS reading may be limited.")
+
+try:
+    import fcswrite
+    FCSWRITE_AVAILABLE = True
+except ImportError:
+    FCSWRITE_AVAILABLE = False
+    logging.warning("fcswrite not available. FCS writing will fall back to copy method.")
 
 
 logger = logging.getLogger(__name__)
@@ -283,11 +291,9 @@ class FCSPreprocessor:
         preserve_metadata: bool = True
     ) -> bool:
         """
-        Process a single FCS file with compensation.
+        Process a single FCS file with compensation and write to FCS format.
         
-        NOTE: Current implementation has limitations with FCS writing.
-        For production use, consider using FlowKit, fcswrite, or other
-        libraries with full FCS 3.0/3.1 write support.
+        Uses fcswrite for proper FCS 3.0/3.1 output with preserved metadata.
         
         Args:
             input_path: Path to input FCS file
@@ -304,54 +310,102 @@ class FCSPreprocessor:
             return False
         
         try:
-            # Read FCS file using fcsparser (widely compatible)
-            if FCSPARSER_AVAILABLE:
-                # Parse the FCS file
-                meta, data = fcsparser.parse(input_path, compensate=False)
-                
-                # Apply compensation
-                compensated_df = self.apply_compensation(
-                    data,
-                    comp_matrix,
-                    markers
-                )
-                
-                # Prepare output directory
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                
-                # LIMITATION: fcsparser is read-only, flowio lacks write support
-                # For now, we'll copy the original file and document the limitation
-                # In production, use FlowKit or fcswrite for proper FCS writing
-                
-                import shutil
-                
-                # Copy original file to preserve FCS format and metadata
-                shutil.copy2(input_path, output_path)
-                
-                # Log a warning about the limitation
-                logger.warning(
-                    f"FCS writing limitation: Copied original file to {output_path}. "
-                    f"Compensation applied in memory but not written to FCS format. "
-                    f"For production use, install FlowKit or fcswrite library."
-                )
-                
-                # Also save compensated data as CSV for verification
-                csv_path = output_path.replace('.fcs', '_compensated.csv')
-                compensated_df.to_csv(csv_path, index=False)
-                logger.info(
-                    f"Saved compensated data to CSV: {csv_path} "
-                    f"(for verification purposes)"
-                )
-                
-                self.files_processed += 1
-                return True
-                
-            else:
+            # Read FCS file using fcsparser
+            if not FCSPARSER_AVAILABLE:
                 logger.error("fcsparser not available for FCS reading")
                 return False
+            
+            # Parse the FCS file
+            meta, data = fcsparser.parse(input_path, compensate=False)
+            
+            # Apply compensation
+            compensated_df = self.apply_compensation(
+                data,
+                comp_matrix,
+                markers
+            )
+            
+            # Prepare output directory
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            
+            # Try to write using fcswrite
+            if FCSWRITE_AVAILABLE:
+                try:
+                    # Preserve original metadata and update with compensation info
+                    updated_meta = meta.copy() if preserve_metadata else {}
+                    updated_meta['$COMP'] = 'Applied'  # Mark as compensated
+                    updated_meta['$DATE'] = datetime.now().strftime('%d-%b-%Y')
+                    
+                    # Write to FCS file
+                    fcswrite.write_fcs(
+                        filename=output_path,
+                        chn_names=list(compensated_df.columns),
+                        data=compensated_df.values,
+                        text_kw_pr=updated_meta,
+                        compat_chn_names=False,
+                        compat_copy=False,
+                        compat_negative=False,
+                        compat_percent=True,
+                        compat_max_int16=10000
+                    )
+                    
+                    logger.info(f"Successfully wrote compensated FCS file: {output_path}")
+                    self.files_processed += 1
+                    return True
+                    
+                except Exception as e:
+                    logger.warning(
+                        f"fcswrite failed for {input_path}: {str(e)}. "
+                        f"Falling back to copy method."
+                    )
+                    # Fall through to fallback method
+            
+            # Fallback if fcswrite unavailable or failed
+            return self._fallback_copy_method(input_path, output_path, compensated_df)
                 
         except Exception as e:
             logger.error(f"Error processing FCS file {input_path}: {str(e)}")
+            self.files_failed += 1
+            return False
+    
+    def _fallback_copy_method(
+        self,
+        input_path: str,
+        output_path: str,
+        compensated_df: pd.DataFrame
+    ) -> bool:
+        """
+        Fallback method if fcswrite unavailable (for backward compatibility).
+        
+        Args:
+            input_path: Path to input FCS file
+            output_path: Path to output FCS file
+            compensated_df: Compensated data DataFrame
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        import shutil
+        
+        try:
+            # Copy original file to preserve FCS format and metadata
+            shutil.copy2(input_path, output_path)
+            
+            # Save compensated data as CSV for verification
+            csv_path = output_path.replace('.fcs', '_compensated.csv')
+            compensated_df.to_csv(csv_path, index=False)
+            
+            logger.warning(
+                f"Fallback mode: Copied original file to {output_path}. "
+                f"Compensated data saved to {csv_path}. "
+                f"Install fcswrite for proper FCS output."
+            )
+            
+            self.files_processed += 1
+            return True
+            
+        except Exception as e:
+            logger.error(f"Fallback copy method failed: {str(e)}")
             self.files_failed += 1
             return False
     
