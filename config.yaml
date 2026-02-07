@@ -31,6 +31,7 @@ discretization:
   
   # Fixed fluorescence intensity bins (used when method="fixed")
   # Cytokine bins (IFNa, IL6, IL12, TNFa) - fluorescence intensity
+  # Note: Use very large number (999999) as practical upper bound
   cytokine_bins: [0, 100, 500, 2000, 999999]
   
   # Dendritic cell marker bins (CD123, MHCII, CD14, CD11c) - fluorescence intensity

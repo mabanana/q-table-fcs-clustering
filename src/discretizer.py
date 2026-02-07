@@ -109,7 +109,12 @@ class ClinicalDiscretizer:
         elif marker_name in self.DENDRITIC_MARKERS:
             bins = self.dendritic_bins
         else:
-            # Default to dendritic bins for unknown markers
+            # Warn about unknown marker and default to dendritic bins
+            logger.warning(
+                f"Unknown marker '{marker_name}' not classified as cytokine or dendritic. "
+                f"Defaulting to dendritic cell bins. Known cytokines: {self.CYTOKINE_MARKERS}, "
+                f"Known dendritic markers: {self.DENDRITIC_MARKERS}"
+            )
             bins = self.dendritic_bins
         
         return np.digitize(values, bins[1:], right=False)
@@ -261,6 +266,11 @@ class ClinicalDiscretizer:
                 bins = self.quantile_bins_cache[marker]
                 if bin_idx < len(bins) - 1:
                     return f"[{bins[bin_idx]:.1f}, {bins[bin_idx+1]:.1f})"
+            else:
+                logger.warning(
+                    f"Marker '{marker}' not found in quantile bins cache. "
+                    f"Discretization may not have been performed yet."
+                )
             return f"Bin {bin_idx}"
         else:  # fixed method
             if marker in self.CYTOKINE_MARKERS:

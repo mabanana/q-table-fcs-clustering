@@ -234,6 +234,30 @@ class TestClinicalDiscretizer:
         # Dendritic markers should use dendritic bins
         assert "CD123" in ClinicalDiscretizer.DENDRITIC_MARKERS
         assert "CD11c" in ClinicalDiscretizer.DENDRITIC_MARKERS
+    
+    def test_fixed_binning_uses_correct_bins(self):
+        """Test that cytokine markers use cytokine bins and dendritic markers use dendritic bins."""
+        # Test that IFNa (cytokine) uses cytokine bins
+        # Cytokine bins: [0, 100, 500, 2000, inf]
+        ifna_value = np.array([150])  # Should fall in bin 1 (100-500)
+        ifna_bin = self.discretizer_fixed.discretize_marker(ifna_value, "IFNa")
+        assert ifna_bin[0] == 1
+        
+        # Test that same value for CD123 (dendritic) uses different bins
+        # Dendritic bins: [0, 500, 1500, 5000, inf]
+        cd123_value = np.array([150])  # Should fall in bin 0 (0-500)
+        cd123_bin = self.discretizer_fixed.discretize_marker(cd123_value, "CD123")
+        assert cd123_bin[0] == 0
+        
+        # Verify they use different bins for the same numerical value
+        assert ifna_bin[0] != cd123_bin[0]
+        
+        # Test boundary values
+        boundary_value = np.array([500])
+        ifna_boundary = self.discretizer_fixed.discretize_marker(boundary_value, "IFNa")
+        cd123_boundary = self.discretizer_fixed.discretize_marker(boundary_value, "CD123")
+        assert ifna_boundary[0] == 2  # 500 in cytokine bins (500-2000)
+        assert cd123_boundary[0] == 1  # 500 in dendritic bins (500-1500)
 
 
 if __name__ == '__main__':
