@@ -208,14 +208,11 @@ __marimo__/
 
 # FCS Clustering Project - Data and Output Files
 # Ignore FCS files in data subdirectories (large scientific data files)
-/data/positive/*.fcs
-/data/positive/*.FCS
-/data/mixed_training/*.fcs
-/data/mixed_training/*.FCS
-/data/mixed/*.fcs
-/data/mixed/*.FCS
+/data/*
 
 # Ignore all generated output files (but keep the directory structure)
 /output/*
 !/output/.gitkeep
 !/output/README.md
+
+pg.py
