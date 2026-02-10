@@ -210,6 +210,11 @@ __marimo__/
 # Ignore FCS files in data subdirectories (large scientific data files)
 /data/*
 
+# Ignore compensated CSV files from preprocessing
+/data/positive/*_compensated.csv
+/data/mixed_training/*_compensated.csv
+/data/mixed/*_compensated.csv
+
 # Ignore all generated output files (but keep the directory structure)
 /output/*
 !/output/.gitkeep

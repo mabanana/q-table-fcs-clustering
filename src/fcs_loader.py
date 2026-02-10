@@ -22,21 +22,30 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+# Constants
+COMPENSATION_FLAG_VALUE = 'APPLIED'  # Value for $COMP metadata flag
+
+
 class FCSLoader:
     """
-    Handles loading and batch processing of FCS files.
+    Enhanced FCS file loader with compensation awareness.
     
     Attributes:
         markers: List of marker names to extract from FCS files
         compensation: Whether to apply compensation matrix if available
         transform: Whether to apply transformation (e.g., log transform)
+        compensation_matrix: Optional compensation matrix to apply
+        compensation_markers: Marker names matching compensation matrix
+        preprocessor: FCSPreprocessor instance for compensation
     """
     
     def __init__(
         self,
         markers: Optional[List[str]] = None,
         compensation: bool = True,
-        transform: bool = True
+        transform: bool = True,
+        compensation_matrix: Optional[np.ndarray] = None,
+        compensation_markers: Optional[List[str]] = None
     ):
         """
         Initialize the FCS loader.
@@ -45,6 +54,8 @@ class FCSLoader:
             markers: List of marker names to extract. If None, extracts all markers.
             compensation: Whether to apply compensation if available in FCS file
             transform: Whether to apply log transformation to data
+            compensation_matrix: Optional compensation matrix to apply
+            compensation_markers: Marker names matching compensation matrix
         """
         if not FCS_AVAILABLE:
             raise ImportError(
@@ -55,14 +66,31 @@ class FCSLoader:
         self.markers = markers
         self.compensation = compensation
         self.transform = transform
+        self.compensation_matrix = compensation_matrix
+        self.compensation_markers = compensation_markers
+        self.files_loaded = []
+        
+        # Initialize preprocessor if compensation matrix provided
+        if compensation_matrix is not None:
+            from .preprocessing import FCSPreprocessor
+            self.preprocessor = FCSPreprocessor()
+            logger.info("FCS Loader initialized with compensation support")
+        else:
+            self.preprocessor = None
+        
         logger.info(f"Initialized FCSLoader with markers: {markers}")
     
-    def load_fcs_file(self, file_path: str) -> Tuple[pd.DataFrame, Dict]:
+    def load_fcs_file(
+        self,
+        file_path: str,
+        apply_compensation: bool = True
+    ) -> Tuple[pd.DataFrame, Dict]:
         """
-        Load a single FCS file.
+        Load a single FCS file with optional compensation.
         
         Args:
             file_path: Path to the FCS file
+            apply_compensation: Whether to apply compensation (if available)
             
         Returns:
             Tuple of (data DataFrame, metadata dictionary)
@@ -79,11 +107,29 @@ class FCSLoader:
             meta, data = fcsparser.parse(
                 file_path,
                 meta_data_only=False,
-                compensate=self.compensation
+                compensate=False  # Don't use built-in compensation
             )
             
             logger.debug(f"Loaded FCS file: {file_path}")
             logger.debug(f"Available channels: {list(data.columns)}")
+            
+            # Check if file is already compensated
+            is_compensated = meta.get('$COMP', '').upper() == COMPENSATION_FLAG_VALUE
+            
+            # Apply compensation if requested and not already compensated
+            if (apply_compensation and 
+                not is_compensated and 
+                self.compensation_matrix is not None and
+                self.preprocessor is not None):
+                
+                logger.debug(f"Applying compensation to {file_path}")
+                data = self.preprocessor.apply_compensation(
+                    data,
+                    self.compensation_matrix,
+                    self.compensation_markers
+                )
+            elif is_compensated:
+                logger.debug(f"File already compensated: {file_path}")
             
             # Extract only requested markers if specified
             if self.markers:
@@ -98,6 +144,8 @@ class FCSLoader:
             # Apply transformation if requested
             if self.transform:
                 data = self._apply_transform(data)
+            
+            self.files_loaded.append(file_path)
             
             return data, meta
             
@@ -300,6 +348,34 @@ class FCSLoader:
         
         logger.info(f"Aggregated data from {len(file_results)} files using {aggregation}")
         return result
+    
+    @classmethod
+    def from_compensation_file(
+        cls,
+        compensation_csv: str,
+        markers: List[str] = None
+    ):
+        """
+        Factory method to create FCSLoader with compensation from CSV.
+        
+        Args:
+            compensation_csv: Path to compensation matrix CSV
+            markers: List of markers to extract
+            
+        Returns:
+            FCSLoader instance with compensation loaded
+        """
+        from .preprocessing import CompensationMatrixLoader
+        
+        loader = CompensationMatrixLoader()
+        comp_matrix = loader.load_from_csv(compensation_csv)
+        comp_markers = loader.get_marker_names()
+        
+        return cls(
+            markers=markers,
+            compensation_matrix=comp_matrix,
+            compensation_markers=comp_markers
+        )
 
 
 def load_fcs_batch(

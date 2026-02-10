@@ -72,6 +72,64 @@ conda activate rapids-23.12
 pip install -r requirements.txt
 ```
 
+## 🔧 Preprocessing Raw Data (Optional)
+
+If you have raw, uncompensated FCS files from flow cytometry, run the preprocessing pipeline first:
+
+```bash
+# Run preprocessing with compensation
+python preprocess_data.py \
+  --raw-dir data/raw/ \
+  --compensation data/compensation/0001.csv \
+  --metadata data/compensation/HEUvsUE.csv
+
+# This will:
+# 1. Apply compensation matrix to correct spectral overlap
+# 2. Route files to correct directories based on labels
+# 3. Rename files to include labels and conditions
+```
+
+See `data/README.md` for detailed preprocessing documentation.
+
+**If you already have compensated, organized FCS files**, skip this step and place them directly in the appropriate directories.
+
+## 🔧 Compensation Workflow
+
+The system supports two compensation workflows:
+
+### Workflow 1: Pre-process and Train (Recommended)
+
+```bash
+# Step 1: Preprocess raw FCS files with compensation
+python preprocess_data.py \
+  --raw-dir data/raw/ \
+  --compensation data/compensation/0001.csv \
+  --metadata data/compensation/HEUvsUE.csv
+
+# Step 2: Train on compensated files
+python main.py --train-full --episodes 2000
+```
+
+### Workflow 2: Compensate During Training
+
+```bash
+# Apply compensation on-the-fly during training
+python main.py --train-full \
+  --episodes 2000 \
+  --compensation data/compensation/0001.csv \
+  --apply-compensation
+```
+
+**Note**: Workflow 1 is recommended for:
+- Large datasets (avoids repeated compensation)
+- Reproducibility (compensation applied once)
+- Debugging (intermediate files available)
+
+Workflow 2 is useful for:
+- Quick experiments
+- Testing different compensation matrices
+- When disk space is limited
+
 ## 📊 Data Preparation
 
 Place your FCS files in the appropriate directories:

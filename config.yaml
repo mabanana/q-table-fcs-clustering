@@ -1,5 +1,34 @@
 # Q-Learning FCS Clustering Configuration
 
+# Preprocessing settings
+preprocessing:
+  raw_data_dir: "data/raw/"
+  compensation_dir: "data/compensation/"
+  metadata_files:
+    - "data/compensation/HEUvsUE.csv"
+    - "data/compensation/HEUvsUETraining.csv"
+  
+  # Compensation settings
+  compensation:
+    apply: true
+    matrix_file: "data/compensation/0001.csv"
+    validate_markers: true
+    # Optional: Path to compensation matrix for training pipeline
+    # If specified, will be applied during data loading
+    apply_during_training: false
+  
+  # File routing rules
+  routing:
+    positive_label: "HEU"  # Label to treat as positive for /data/positive/
+    mixed_training_labels: ["HEU", "UE"]  # Labels for mixed training
+    test_label: "NA"  # Label for unlabeled test data
+    include_stimulation_in_filename: true  # Include stimulation condition in output filename
+  
+  # Processing options
+  preserve_metadata: true
+  overwrite_existing: false
+  log_file: "output/preprocessing.log"
+
 # Data paths
 data:
   positive: "data/positive/"

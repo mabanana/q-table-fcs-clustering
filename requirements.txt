@@ -6,8 +6,11 @@ seaborn>=0.11.0
 scikit-learn>=1.0.0
 scipy>=1.7.0
 
-# FCS file parsing
+# FCS file parsing and manipulation
 fcsparser>=0.2.0
+flowio>=1.0.0  # For reading/writing FCS files with compensation support
+flowutils>=1.0.0  # FCS file utilities
+fcswrite>=0.6.0  # For proper FCS 3.0/3.1 writing
 
 # Progress bars
 tqdm>=4.62.0
