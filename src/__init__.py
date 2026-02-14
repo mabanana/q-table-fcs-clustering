@@ -1,7 +1,7 @@
 """
 Q-Learning FCS Clustering System
 
-A reinforcement learning approach to HIV diagnosis using flow cytometry data.
+A reinforcement learning approach to AML classification using flow cytometry data.
 """
 
 __version__ = "1.0.0"

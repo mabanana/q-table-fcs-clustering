@@ -1,17 +1,17 @@
 # Data Directory
 
-This directory contains subdirectories for FCS (Flow Cytometry Standard) files used in the Q-learning clustering project for HIV diagnosis.
+This directory contains subdirectories for FCS (Flow Cytometry Standard) files used in the Q-learning clustering project for AML classification.
 
 ## Subdirectories
 
 ### `/data/positive/`
-Contains FCS files from HIV positive patients only. These files are used for initial training and understanding the characteristics of positive samples.
+Contains FCS files from AML positive samples only. These files are used for initial training and understanding the characteristics of positive samples.
 
 ### `/data/mixed_training/`
-Contains prelabeled FCS files (both positive and negative) used for supervised training of the machine learning model. Each file should be properly labeled to indicate whether it's from a positive or negative patient.
+Contains prelabeled FCS files (both positive and negative) used for supervised training of the machine learning model. Each file should be properly labeled to indicate whether it's from a positive or negative sample.
 
 ### `/data/mixed/`
-Contains unlabeled FCS files for final diagnosis testing. The trained model will analyze these files to predict HIV status.
+Contains unlabeled FCS files for final classification testing. The trained model will analyze these files to predict AML status.
 
 ## File Format
 

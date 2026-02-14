@@ -1,10 +1,10 @@
 # Project Implementation Summary
 
-## Q-Learning FCS Clustering System for HIV Diagnosis
+## Q-Learning FCS Clustering System for AML Classification
 
 ### Implementation Complete ✅
 
-This project implements a complete reinforcement learning system for automated HIV diagnosis using flow cytometry data.
+This project implements a complete reinforcement learning system for automated AML classification using flow cytometry data.
 
 ## Files Created
 
@@ -46,7 +46,7 @@ This project implements a complete reinforcement learning system for automated H
 - Marker-specific discretization thresholds
 
 ### 2. Two-Phase Progressive Training
-- **Phase 1**: Quality optimization on HIV+ samples (silhouette score)
+- **Phase 1**: Quality optimization on AML+ samples (silhouette score)
 - **Phase 2**: Diagnostic refinement on labeled samples (F1-score)
 
 ### 3. GPU Acceleration
@@ -74,14 +74,14 @@ python main.py --visualize --q-table output/q_table.pkl
 
 This project demonstrates:
 1. **Reinforcement Learning**: Q-learning, exploration vs exploitation
-2. **Medical AI**: Real-world application to HIV diagnosis
+2. **Medical AI**: Real-world application to AML classification
 3. **Domain Knowledge Integration**: Marker-specific binning in ML system
 4. **Software Engineering**: Modular design, testing, documentation
 5. **Scientific Computing**: NumPy, pandas, scikit-learn, visualization
 
 ## Science Fair Strengths
 
-1. **Clear Real-World Impact**: HIV diagnosis automation
+1. **Clear Real-World Impact**: AML classification automation
 2. **Novel Approach**: RL for medical clustering (not common)
 3. **Solid Scientific Foundation**: Feature-based binning
 4. **Comprehensive Documentation**: Easy to understand and replicate
@@ -98,10 +98,10 @@ from src.q_learning import QLearningAgent, create_action_space
 from src.trainer import ReinforcementClusteringPipeline
 
 # Initialize components
-loader = FCSLoader(markers=["IFNa", "TNFa"])
+loader = FCSLoader(markers=["CD45-ECD", "SS Log"])
 discretizer = ClinicalDiscretizer(
-    feature_bins={"IFNa": [0, 0.5, 1.0, 2.0, np.inf], "TNFa": [0, 0.5, 1.0, 2.0, np.inf]},
-    state_features=["IFNa", "TNFa"]
+    feature_bins={"CD45-ECD": [], "SS Log": []},
+    state_features=["CD45-ECD", "SS Log"]
 )
 action_space = create_action_space(2, 10)
 q_agent = QLearningAgent(n_states=16, n_actions=9)
@@ -113,7 +113,7 @@ trainer = ReinforcementClusteringPipeline(
     discretizer=discretizer,
     fcs_loader=loader,
     clustering_engine=ClusteringEngine(),
-    state_features=["IFNa", "TNFa"]
+    state_features=["CD45-ECD", "SS Log"]
 )
 
 # Train

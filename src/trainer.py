@@ -77,7 +77,7 @@ class ReinforcementClusteringPipeline:
         Objective: Optimize cluster count selection for maximum cluster quality.
         
         Args:
-            positive_samples_path: Directory with HIV+ FCS files
+            positive_samples_path: Directory with AML+ FCS files
             learning_iterations: Number of RL iterations
             samples_per_iteration: Batch size for each iteration
             quality_measure: Quality metric ('silhouette' or 'inertia')
@@ -205,7 +205,7 @@ class ReinforcementClusteringPipeline:
         """
         Phase 2: Diagnostic accuracy refinement on labeled heterogeneous samples.
         
-        Objective: Fine-tune cluster selection for optimal HIV diagnosis.
+        Objective: Fine-tune cluster selection for optimal AML classification.
         
         Args:
             labeled_samples_path: Directory with labeled FCS files

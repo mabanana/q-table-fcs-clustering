@@ -2,7 +2,7 @@
 """
 Main Execution Script for Q-Learning FCS Clustering System
 
-A reinforcement learning approach to HIV diagnosis using flow cytometry data.
+A reinforcement learning approach to AML classification using flow cytometry data.
 This is a science fair project demonstrating RL applied to medical diagnostics.
 """
 
@@ -273,7 +273,7 @@ def execute_visualization(q_agent, trainer, action_space, discretizer, config: d
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Q-Learning FCS Clustering System for HIV Diagnosis",
+        description="Q-Learning FCS Clustering System for AML Classification",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -294,7 +294,7 @@ Examples:
     # Mode selection
     mode_group = parser.add_argument_group('Execution Modes')
     mode_group.add_argument('--train-phase1', action='store_true',
-                           help='Train Phase 1 only (quality learning on HIV+ data)')
+                           help='Train Phase 1 only (quality learning on AML+ data)')
     mode_group.add_argument('--train-phase2', action='store_true',
                            help='Train Phase 2 only (diagnostic refinement on labeled data)')
     mode_group.add_argument('--train-full', action='store_true',
@@ -332,7 +332,7 @@ Examples:
     
     logger.info("=" * 80)
     logger.info("Q-LEARNING FCS CLUSTERING SYSTEM")
-    logger.info("Reinforcement Learning for HIV Diagnosis")
+    logger.info("Reinforcement Learning for AML Classification")
     logger.info("=" * 80)
     
     # Load configuration
