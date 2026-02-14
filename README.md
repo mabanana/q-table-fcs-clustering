@@ -1,23 +1,28 @@
-# Q-Learning FCS Clustering System for HIV Diagnosis
+# Q-Learning FCS Clustering System for AML Classification
 
-A reinforcement learning approach to automated HIV status diagnosis using flow cytometry data. This project demonstrates the application of Q-learning to medical diagnostics through clinically-informed feature discretization and two-phase progressive training.
+A reinforcement learning approach to automated AML status classification using flow cytometry data. This project demonstrates the application of Q-learning to medical diagnostics through clinically-informed feature discretization and two-phase progressive training.
 
 ## 🎯 Project Overview
 
-This system uses Q-learning (a reinforcement learning algorithm) to learn optimal clustering strategies for HIV diagnosis based on flow cytometry standard (FCS) data. The approach is unique in that it:
+This system uses Q-learning (a reinforcement learning algorithm) to learn optimal clustering strategies for AML classification based on flow cytometry standard (FCS) data. The approach is unique in that it:
 
 1. **Uses feature-based discretization**: Feature bins are configurable per marker rather than arbitrary quantiles
 2. **Employs two-phase progressive training**: 
-   - Phase 1: Quality optimization on HIV+ samples only
+   - Phase 1: Quality optimization on AML+ samples only
    - Phase 2: Diagnostic refinement on labeled mixed samples
 3. **Supports GPU acceleration**: Can use RAPIDS cuML for faster clustering on compatible GPUs
 4. **Provides comprehensive visualizations**: Ideal for science fair presentations and educational purposes
 
 ## 🔬 Scientific Motivation
 
-Flow cytometry measures immune markers (e.g., IFNa, IL6, TNFa, CD123, MHCII) that reflect inflammation and activation states relevant to HIV. This system learns clustering strategies from these marker patterns rather than relying on fixed clinical thresholds.
+Flow cytometry is a powerful tool for AML (Acute Myeloid Leukemia) diagnosis and classification. In AML, abnormal blast cells accumulate in bone marrow and blood. Key markers for AML analysis include:
 
-Traditional diagnosis uses fixed thresholds, but this system learns optimal clustering strategies through reinforcement learning.
+- **CD45-ECD**: A pan-leukocyte marker (common leukocyte antigen) that helps distinguish different cell populations. In AML, blast cells typically show dim to moderate CD45 expression compared to mature lymphocytes.
+- **SS Log (Side Scatter)**: Measures cell granularity and internal complexity. AML blasts often have characteristic side scatter properties that differ from normal cells.
+- **FS Lin (Forward Scatter)**: Indicates cell size, useful for identifying cell populations.
+- **Additional markers** (IgG1-FITC, IgG1-PE, IgG1-PC5, IgG1-PC7): Isotype controls used to establish baseline fluorescence.
+
+The combination of CD45 and side scatter is particularly powerful for identifying abnormal blast populations characteristic of AML. This system learns optimal clustering strategies from these marker patterns rather than relying on fixed clinical thresholds, using reinforcement learning to adapt to data variations.
 
 ## 📋 Requirements
 
@@ -75,7 +80,7 @@ Place your FCS files in the appropriate directories:
 
 ```
 data/
-├── positive/           # HIV+ samples for Phase 1 training
+├── positive/           # AML+ samples for Phase 1 training
 │   ├── patient001.fcs
 │   ├── patient002.fcs
 │   └── ...
@@ -89,7 +94,7 @@ data/
     └── ...
 ```
 
-**Important**: For labeled training data (Phase 2), filenames must contain "positive" or "negative" to indicate HIV status.
+**Important**: For labeled training data (Phase 2), filenames must contain "positive" or "negative" to indicate AML status.
 
 ## 🎮 Usage
 
@@ -103,7 +108,7 @@ python main.py --train-full --episodes 2000 --use-gpu
 
 ### Phase-by-Phase Training
 
-**Phase 1 Only** (Quality learning on HIV+ data):
+**Phase 1 Only** (Quality learning on AML+ data):
 ```bash
 python main.py --train-phase1 --episodes 1000
 ```
@@ -159,10 +164,10 @@ data:
 ### Feature Discretization Thresholds
 ```yaml
 discretization:
-  state_features: ["IFNa", "TNFa"]
+  state_features: ["CD45-ECD", "SS Log"]
   feature_bins:
-    IFNa: [0, 0.5, 1.0, 2.0, 999999]
-    TNFa: [0, 0.5, 1.0, 2.0, 999999]
+    CD45-ECD: []  # To be determined from actual data
+    SS Log: []    # To be determined from actual data
 ```
 
 ### Q-Learning Parameters
@@ -224,13 +229,13 @@ Where:
 ### 5. Two-Phase Progressive Training
 
 **Phase 1: Quality Optimization**
-- Data: HIV+ samples only
+- Data: AML+ samples only
 - Objective: Learn cluster counts that maximize silhouette score
 - Reward: Silhouette score (cluster quality metric)
 - Purpose: Understand structure of positive samples
 
 **Phase 2: Diagnostic Refinement**
-- Data: Mixed labeled samples (HIV+ and HIV-)
+- Data: Mixed labeled samples (AML+ and AML-)
 - Objective: Fine-tune for diagnostic accuracy
 - Reward: F1-score or Matthews Correlation Coefficient
 - Purpose: Optimize cluster-to-diagnosis mapping
@@ -273,7 +278,7 @@ output/
 - `encoded_state`: Discrete state representation
 - `selected_cluster_count`: Chosen k value
 - `assigned_cluster`: Which cluster the sample belongs to
-- `predicted_hiv_status`: "positive" or "negative"
+- `predicted_hiv_status`: "positive" or "negative" (Note: variable name retained for compatibility)
 
 ## 🧪 Testing
 
@@ -317,7 +322,7 @@ pytest tests/ --cov=src --cov-report=html
 
 ## 🎓 Science Fair Presentation Tips
 
-1. **Explain the Clinical Context**: Start with why HIV diagnosis matters and what flow cytometry measures
+1. **Explain the Clinical Context**: Start with why AML classification matters and what flow cytometry measures
 
 2. **Demonstrate Reinforcement Learning**: Use visualizations to show how the Q-table evolves during training
 
@@ -332,8 +337,8 @@ pytest tests/ --cov=src --cov-report=html
 ## 📚 References
 
 ### Scientific Background
-1. **WHO HIV Staging**: [WHO Guidelines](https://www.who.int/hiv/pub/guidelines/HIVstaging150307.pdf)
-2. **Flow Cytometry**: Understanding immune cell populations
+1. **AML Classification**: Understanding acute myeloid leukemia diagnosis and flow cytometry markers
+2. **Flow Cytometry**: CD45 and side scatter analysis for blast cell identification
 3. **FlowCAP Challenge**: Community benchmark for flow cytometry analysis
 
 ### Technical References
@@ -355,7 +360,7 @@ For questions about this project, please open a GitHub issue.
 
 ## 🙏 Acknowledgments
 
-- WHO for HIV staging criteria
+- Medical community for AML classification criteria
 - ISAC for FCS standard specification
 - RAPIDS team for cuML GPU acceleration
 - FlowCAP community for flow cytometry benchmarks
