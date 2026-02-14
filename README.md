@@ -278,7 +278,7 @@ output/
 - `encoded_state`: Discrete state representation
 - `selected_cluster_count`: Chosen k value
 - `assigned_cluster`: Which cluster the sample belongs to
-- `predicted_hiv_status`: "positive" or "negative" (Note: variable name retained for compatibility)
+- `predicted_diagnosis`: "positive" or "negative"
 
 ## 🧪 Testing
 

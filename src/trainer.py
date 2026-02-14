@@ -430,7 +430,7 @@ class ReinforcementClusteringPipeline:
                 'encoded_state': current_state,
                 'selected_cluster_count': cluster_count,
                 'assigned_cluster': assigned_cluster,
-                'predicted_hiv_status': predicted_status
+                'predicted_diagnosis': predicted_status
             })
         
         results_dataframe = pd.DataFrame(prediction_records)

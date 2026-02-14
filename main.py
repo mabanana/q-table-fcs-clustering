@@ -193,9 +193,9 @@ def execute_testing(trainer, config: dict, input_dir: str = None, output_file: s
     logger.info(f"Total predictions: {len(results)}")
     
     # Print summary statistics
-    if 'predicted_hiv_status' in results.columns:
-        positive_count = (results['predicted_hiv_status'] == 'positive').sum()
-        negative_count = (results['predicted_hiv_status'] == 'negative').sum()
+    if 'predicted_diagnosis' in results.columns:
+        positive_count = (results['predicted_diagnosis'] == 'positive').sum()
+        negative_count = (results['predicted_diagnosis'] == 'negative').sum()
         logger.info(f"Predicted positive: {positive_count}, negative: {negative_count}")
     
     return results
