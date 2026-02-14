@@ -67,10 +67,11 @@ def initialize_components(config: dict, use_gpu: bool = True):
     logger.info(f"FCS Loader initialized with markers: {primary_markers}")
     
     # Initialize discretizer
+    state_features = disc_config.get('state_features') or primary_markers[:2]
+    feature_bins = disc_config.get('feature_bins', {})
     discretizer = ClinicalDiscretizer(
-        cd4_bins=disc_config['cd4_bins'],
-        cd4_cd8_ratio_bins=disc_config['cd4_cd8_ratio_bins'],
-        activation_bins=disc_config['activation_bins']
+        feature_bins=feature_bins,
+        state_features=state_features
     )
     logger.info("Clinical Discretizer initialized")
     logger.info("\n" + discretizer.explain_discretization())
@@ -86,9 +87,16 @@ def initialize_components(config: dict, use_gpu: bool = True):
     action_space = create_action_space(min_clusters, max_clusters)
     n_actions = len(action_space)
     
-    # Determine number of states (2 or 3 features, 4 bins each)
-    use_activation = 'HLA-DR' in markers_config.get('secondary', [])
-    n_states = 64 if use_activation else 16
+    # Determine number of states (bins per feature)
+    if len(state_features) < 2 or len(state_features) > 3:
+        raise ValueError(
+            "state_features must contain 2 or 3 feature names for state encoding. "
+            f"Got: {state_features}"
+        )
+    bin_sizes = [max(len(feature_bins.get(feature, [])) - 1, 1) for feature in state_features]
+    n_states = 1
+    for size in bin_sizes:
+        n_states *= size
     
     # Initialize Q-learning agent
     q_agent = QLearningAgent(
@@ -109,7 +117,8 @@ def initialize_components(config: dict, use_gpu: bool = True):
         discretizer=discretizer,
         fcs_loader=fcs_loader,
         clustering_engine=clustering_engine,
-        use_activation=use_activation
+        state_features=state_features,
+        feature_markers=primary_markers
     )
     
     return trainer, q_agent, action_space, discretizer

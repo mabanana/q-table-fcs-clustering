@@ -36,7 +36,8 @@ class ReinforcementClusteringPipeline:
         discretizer: ClinicalDiscretizer,
         fcs_loader: FCSLoader,
         clustering_engine: ClusteringEngine,
-        use_activation: bool = False
+        state_features: Optional[List[str]] = None,
+        feature_markers: Optional[List[str]] = None
     ):
         """
         Initialize the reinforcement clustering pipeline.
@@ -47,14 +48,16 @@ class ReinforcementClusteringPipeline:
             discretizer: Feature discretization module
             fcs_loader: Flow cytometry file loader
             clustering_engine: Clustering computation module
-            use_activation: Include activation markers in state encoding
+            state_features: Feature names used for state encoding
+            feature_markers: Optional list of marker names to use for clustering
         """
         self.decision_maker = q_agent
         self.cluster_action_map = action_space
         self.feature_binner = discretizer
         self.data_reader = fcs_loader
         self.cluster_computer = clustering_engine
-        self.include_activation_marker = use_activation
+        self.state_features = state_features or []
+        self.feature_markers = feature_markers
         
         self.phase1_progress = []
         self.phase2_progress = []
@@ -100,15 +103,13 @@ class ReinforcementClusteringPipeline:
         # Apply clinical binning
         binned_features = self.feature_binner.discretize_data(
             summary_stats,
-            cd4_column=self._locate_marker_column(summary_stats, "CD4"),
-            cd8_column=self._locate_marker_column(summary_stats, "CD8"),
-            activation_column=self._locate_marker_column(summary_stats, "HLA-DR") if self.include_activation_marker else None
+            feature_names=self.state_features
         )
         
         # Encode as discrete states
         encoded_states = self.feature_binner.get_state_from_data(
             binned_features,
-            use_activation=self.include_activation_marker
+            feature_names=self.state_features
         )
         
         logger.info(f"State space coverage: {len(np.unique(encoded_states))} unique states")
@@ -251,15 +252,13 @@ class ReinforcementClusteringPipeline:
         # Apply clinical binning
         binned_features = self.feature_binner.discretize_data(
             labeled_subset,
-            cd4_column=self._locate_marker_column(labeled_subset, "CD4"),
-            cd8_column=self._locate_marker_column(labeled_subset, "CD8"),
-            activation_column=self._locate_marker_column(labeled_subset, "HLA-DR") if self.include_activation_marker else None
+            feature_names=self.state_features
         )
         
         # Encode states
         encoded_states = self.feature_binner.get_state_from_data(
             binned_features,
-            use_activation=self.include_activation_marker
+            feature_names=self.state_features
         )
         
         # Extract features and ground truth
@@ -393,15 +392,13 @@ class ReinforcementClusteringPipeline:
         # Apply clinical binning
         binned_features = self.feature_binner.discretize_data(
             summary_stats,
-            cd4_column=self._locate_marker_column(summary_stats, "CD4"),
-            cd8_column=self._locate_marker_column(summary_stats, "CD8"),
-            activation_column=self._locate_marker_column(summary_stats, "HLA-DR") if self.include_activation_marker else None
+            feature_names=self.state_features
         )
         
         # Encode states
         encoded_states = self.feature_binner.get_state_from_data(
             binned_features,
-            use_activation=self.include_activation_marker
+            feature_names=self.state_features
         )
         
         # Extract features
@@ -457,21 +454,56 @@ class ReinforcementClusteringPipeline:
     
     def _build_feature_matrix(self, dataframe: pd.DataFrame) -> np.ndarray:
         """Build numerical feature matrix for clustering."""
-        cd4_col = self._locate_marker_column(dataframe, "CD4")
-        cd8_col = self._locate_marker_column(dataframe, "CD8")
-        
         feature_columns = []
-        if cd4_col in dataframe.columns:
-            feature_columns.append(cd4_col)
-        if cd8_col in dataframe.columns:
-            feature_columns.append(cd8_col)
-        
-        if self.include_activation_marker:
-            activation_col = self._locate_marker_column(dataframe, "HLA-DR")
-            if activation_col in dataframe.columns:
-                feature_columns.append(activation_col)
-        
+
+        if self.feature_markers:
+            for marker in self.feature_markers:
+                col_name = self._locate_marker_column(dataframe, marker)
+                if col_name in dataframe.columns:
+                    feature_columns.append(col_name)
+        else:
+            numeric_columns = dataframe.select_dtypes(include=[np.number]).columns.tolist()
+            numeric_columns = [
+                col for col in numeric_columns
+                if col not in {"filename", "label", "diagnosis"}
+            ]
+            feature_columns = numeric_columns
+
         if not feature_columns:
-            raise ValueError("No feature columns located")
-        
-        return dataframe[feature_columns].values
+            numeric_columns = dataframe.select_dtypes(include=[np.number]).columns.tolist()
+            numeric_columns = [
+                col for col in numeric_columns
+                if col not in {"filename", "label", "diagnosis"}
+            ]
+            feature_columns = numeric_columns
+
+        if not feature_columns:
+            raise ValueError(
+                "No feature columns located. "
+                f"Available columns: {list(dataframe.columns)}"
+            )
+
+        feature_df = dataframe[feature_columns].copy()
+        feature_df = feature_df.replace([np.inf, -np.inf], np.nan)
+
+        all_nan_columns = feature_df.columns[feature_df.isna().all()].tolist()
+        if all_nan_columns:
+            logger.warning(
+                "Dropping all-NaN feature columns: %s",
+                all_nan_columns
+            )
+            feature_df = feature_df.drop(columns=all_nan_columns)
+
+        if feature_df.isna().any().any():
+            column_medians = feature_df.median()
+            feature_df = feature_df.fillna(column_medians)
+            if feature_df.isna().any().any():
+                feature_df = feature_df.fillna(0.0)
+
+        if feature_df.shape[1] == 0:
+            raise ValueError(
+                "No usable feature columns after cleaning. "
+                f"Available columns: {list(dataframe.columns)}"
+            )
+
+        return feature_df.values

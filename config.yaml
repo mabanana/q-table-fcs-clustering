@@ -1,60 +1,114 @@
-# Q-Learning FCS Clustering Configuration
-
-# Data paths
 data:
-  positive: "data/positive/"
-  mixed_training: "data/mixed_training/"
-  mixed_test: "data/mixed/"
-
-# Markers to use from FCS files
+  positive: data/positive/
+  mixed_training: data/mixed_training/
+  mixed_test: data/mixed/
 markers:
-  primary: ["CD4", "CD8"]
-  secondary: ["CD3", "HLA-DR", "CD45RA", "CD45RO"]
-  # Which markers to use for clustering (defaults to primary)
-  use_for_clustering: ["CD4", "CD8"]
-
-# Discretization bins (clinically-informed thresholds)
+  primary:
+  - IFNa
+  - CD123
+  - MHCII
+  - CD14
+  - CD11c
+  - IL6
+  - IL12
+  - TNFa
+  secondary: []
+  use_for_clustering:
+  - IFNa
+  - CD123
+  - MHCII
+  - CD14
+  - CD11c
+  - IL6
+  - IL12
+  - TNFa
 discretization:
-  # WHO HIV staging criteria for CD4 counts (cells/μL)
-  # Note: 999999 is used as practical upper bound (effectively infinity for cell counts)
-  cd4_bins: [0, 200, 350, 500, 999999]
-  
-  # Clinical significance of CD4/CD8 ratio
-  cd4_cd8_ratio_bins: [0, 1.0, 1.5, 2.5, 999999]
-  
-  # HLA-DR activation levels (MFI or count)
-  activation_bins: [0, 500, 1500, 3000, 999999]
-  
-# Q-learning parameters
+  state_features:
+  - IL6
+  - IFNa
+  - CD123
+  feature_bins:
+    IFNa:
+    - 0.10182395577430725
+    - 0.34473078250885014
+    - 0.4360496401786804
+    - 0.49902841448783875
+    - 0.5790875554084778
+    - 0.8088668584823608
+    CD123:
+    - 0.2319154590368271
+    - 0.8223828554153443
+    - 1.064225149154663
+    - 1.2975698709487915
+    - 1.5907966375350955
+    - 2.524296760559082
+    MHCII:
+    - 0.20848633348941803
+    - 0.7228737473487854
+    - 0.7228747473487854
+    - 0.7228757473487855
+    - 0.7228767473487855
+    - 1.3013273477554321
+    CD14:
+    - 0.2841603457927704
+    - 1.3064766645431518
+    - 1.7576342582702638
+    - 2.0454519271850584
+    - 2.323347854614258
+    - 2.8497731685638428
+    CD11c:
+    - 0.05996405705809593
+    - 0.2150062918663025
+    - 0.33881266117095954
+    - 0.47536059021949767
+    - 0.7683863401412966
+    - 2.698179006576538
+    IL6:
+    - 0.43908751010894775
+    - 1.440326452255249
+    - 1.440327452255249
+    - 1.4403284522552489
+    - 1.4403294522552488
+    - 1.9346765279769897
+    IL12:
+    - 0.32997894287109375
+    - 0.6835194826126099
+    - 0.6835204826126099
+    - 0.6835214826126099
+    - 0.68352248261261
+    - 1.0686577558517456
+    TNFa:
+    - 0.43665751814842224
+    - 1.7083473205566406
+    - 1.7083483205566405
+    - 1.7083493205566405
+    - 1.7083503205566404
+    - 2.1061289310455322
 q_learning:
   epsilon_start: 0.3
   epsilon_end: 0.05
   epsilon_decay: 0.995
   learning_rate: 0.1
   discount_factor: 0.9
-  n_clusters_range: [2, 10]  # Range of possible cluster counts to choose from
-
-# Training parameters
+  n_clusters_range:
+  - 2
+  - 10
 training:
   stage1_episodes: 1000
   stage2_episodes: 1000
-  batch_size: 10  # Number of files to process per episode
+  batch_size: 10
   random_seed: 42
-
-# GPU settings
 gpu:
   use_gpu: true
   fallback_to_cpu: true
-
-# Visualization settings
 visualization:
   dpi: 300
-  figure_size: [10, 8]
-  color_scheme: "viridis"
-  output_dir: "output/plots/"
-
-# Output settings
+  figure_size:
+  - 10
+  - 8
+  color_scheme: viridis
+  output_dir: output/plots/
 output:
-  q_table_path: "output/q_table.pkl"
-  results_path: "output/results.csv"
-  log_path: "output/training.log"
+  q_table_path: output/q_table.pkl
+  results_path: output/results.csv
+  log_path: output/training.log

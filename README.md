@@ -6,7 +6,7 @@ A reinforcement learning approach to automated HIV status diagnosis using flow c
 
 This system uses Q-learning (a reinforcement learning algorithm) to learn optimal clustering strategies for HIV diagnosis based on flow cytometry standard (FCS) data. The approach is unique in that it:
 
-1. **Uses clinically-informed discretization**: Feature bins are based on WHO HIV staging criteria rather than arbitrary quantiles
+1. **Uses feature-based discretization**: Feature bins are configurable per marker rather than arbitrary quantiles
 2. **Employs two-phase progressive training**: 
    - Phase 1: Quality optimization on HIV+ samples only
    - Phase 2: Diagnostic refinement on labeled mixed samples
@@ -15,10 +15,7 @@ This system uses Q-learning (a reinforcement learning algorithm) to learn optima
 
 ## 🔬 Scientific Motivation
 
-Flow cytometry measures cell surface markers (CD4, CD8, CD3, HLA-DR, etc.) that are crucial for immune system health. HIV specifically attacks CD4+ T cells, leading to:
-- **Decreased CD4 counts**: WHO uses CD4 thresholds to stage HIV disease
-- **Inverted CD4/CD8 ratio**: Healthy individuals have ratios >1.0; HIV patients often <1.0
-- **Immune activation**: Markers like HLA-DR indicate chronic immune activation
+Flow cytometry measures immune markers (e.g., IFNa, IL6, TNFa, CD123, MHCII) that reflect inflammation and activation states relevant to HIV. This system learns clustering strategies from these marker patterns rather than relying on fixed clinical thresholds.
 
 Traditional diagnosis uses fixed thresholds, but this system learns optimal clustering strategies through reinforcement learning.
 
@@ -159,12 +156,13 @@ data:
   mixed_test: "data/mixed/"
 ```
 
-### Clinical Discretization Thresholds
+### Feature Discretization Thresholds
 ```yaml
 discretization:
-  cd4_bins: [0, 200, 350, 500, 999999]  # WHO HIV staging
-  cd4_cd8_ratio_bins: [0, 1.0, 1.5, 2.5, 999999]
-  activation_bins: [0, 500, 1500, 3000, 999999]
+  state_features: ["IFNa", "TNFa"]
+  feature_bins:
+    IFNa: [0, 0.5, 1.0, 2.0, 999999]
+    TNFa: [0, 0.5, 1.0, 2.0, 999999]
 ```
 
 ### Q-Learning Parameters
@@ -188,33 +186,17 @@ training:
 
 ## 🧠 How It Works
 
-### 1. Clinically-Informed Discretization
+### 1. Feature Discretization
 
-Continuous flow cytometry measurements are discretized into bins based on clinical criteria:
-
-**CD4 Count** (WHO HIV Staging):
-- Bin 0: <200 cells/μL (Severe immunodeficiency)
-- Bin 1: 200-350 (Advanced immunodeficiency)
-- Bin 2: 350-500 (Mild immunodeficiency)
-- Bin 3: >500 (Normal)
-
-**CD4/CD8 Ratio** (Clinical Significance):
-- Bin 0: <1.0 (Inverted - immunocompromised)
-- Bin 1: 1.0-1.5 (Low)
-- Bin 2: 1.5-2.5 (Normal)
-- Bin 3: >2.5 (High)
-
-**Activation Markers** (HLA-DR):
-- Bin 0: <500 (Low)
-- Bin 1: 500-1500 (Moderate)
-- Bin 2: 1500-3000 (High)
-- Bin 3: >3000 (Very high)
+Continuous flow cytometry measurements are discretized into bins defined per feature (marker). Bin counts are configurable in config.yaml.
 
 ### 2. State Space
 
 States encode discretized feature combinations:
-- **2 features** (CD4 + CD4/CD8): 4×4 = 16 states
-- **3 features** (+ activation): 4×4×4 = 64 states
+- **2 features**: $b^2$ states
+- **3 features**: $b^3$ states
+
+Where $b$ is the number of bins per feature (e.g., $b=5$ gives 25 or 125 states).
 
 ### 3. Action Space
 

@@ -40,10 +40,10 @@ This project implements a complete reinforcement learning system for automated H
 
 ## Technical Highlights
 
-### 1. Clinically-Informed Design
-- CD4 bins based on WHO HIV staging criteria
-- CD4/CD8 ratio bins based on clinical significance
-- Activation marker thresholds from medical literature
+### 1. Feature-Based Design
+- Configurable bins per marker
+- Flexible state encoding from selected features
+- Marker-specific discretization thresholds
 
 ### 2. Two-Phase Progressive Training
 - **Phase 1**: Quality optimization on HIV+ samples (silhouette score)
@@ -75,7 +75,7 @@ python main.py --visualize --q-table output/q_table.pkl
 This project demonstrates:
 1. **Reinforcement Learning**: Q-learning, exploration vs exploitation
 2. **Medical AI**: Real-world application to HIV diagnosis
-3. **Domain Knowledge Integration**: WHO criteria in ML system
+3. **Domain Knowledge Integration**: Marker-specific binning in ML system
 4. **Software Engineering**: Modular design, testing, documentation
 5. **Scientific Computing**: NumPy, pandas, scikit-learn, visualization
 
@@ -83,7 +83,7 @@ This project demonstrates:
 
 1. **Clear Real-World Impact**: HIV diagnosis automation
 2. **Novel Approach**: RL for medical clustering (not common)
-3. **Solid Scientific Foundation**: WHO staging criteria
+3. **Solid Scientific Foundation**: Feature-based binning
 4. **Comprehensive Documentation**: Easy to understand and replicate
 5. **Visual Results**: Many plots for presentation
 6. **Testable**: Working code with unit tests
@@ -98,8 +98,11 @@ from src.q_learning import QLearningAgent, create_action_space
 from src.trainer import ReinforcementClusteringPipeline
 
 # Initialize components
-loader = FCSLoader(markers=["CD4", "CD8"])
-discretizer = ClinicalDiscretizer()
+loader = FCSLoader(markers=["IFNa", "TNFa"])
+discretizer = ClinicalDiscretizer(
+    feature_bins={"IFNa": [0, 0.5, 1.0, 2.0, np.inf], "TNFa": [0, 0.5, 1.0, 2.0, np.inf]},
+    state_features=["IFNa", "TNFa"]
+)
 action_space = create_action_space(2, 10)
 q_agent = QLearningAgent(n_states=16, n_actions=9)
 
@@ -109,7 +112,8 @@ trainer = ReinforcementClusteringPipeline(
     action_space=action_space,
     discretizer=discretizer,
     fcs_loader=loader,
-    clustering_engine=ClusteringEngine()
+    clustering_engine=ClusteringEngine(),
+    state_features=["IFNa", "TNFa"]
 )
 
 # Train

@@ -98,6 +98,8 @@ class FCSLoader:
             # Apply transformation if requested
             if self.transform:
                 data = self._apply_transform(data)
+
+            data = self._clean_data_values(data)
             
             return data, meta
             
@@ -186,7 +188,7 @@ class FCSLoader:
         """
         Find column names that match the requested markers.
         
-        FCS files may have different naming conventions (e.g., "CD4", "CD4-FITC", "CD4 FITC").
+        FCS files may have different naming conventions (e.g., "IFNa", "IFNa-PE", "IFNa PE").
         This method tries to find the best match.
         
         Args:
@@ -212,7 +214,7 @@ class FCSLoader:
                     matched_columns.append(col)
                     break
             else:
-                # Try partial match (e.g., CD4 matches CD4-FITC)
+                # Try partial match (e.g., IFNa matches IFNa-PE)
                 for col in columns:
                     if marker_lower in col.lower():
                         matched_columns.append(col)
@@ -245,6 +247,26 @@ class FCSLoader:
         
         logger.debug("Applied asinh transformation to data")
         return transformed
+
+    def _clean_data_values(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Clean NaN/Inf values in data.
+
+        Strategy:
+        - Replace inf/-inf with NaN
+        - Fill NaNs with column medians
+        - If any NaNs remain (all-NaN columns), fill with 0
+        """
+        cleaned = data.replace([np.inf, -np.inf], np.nan)
+
+        if cleaned.isna().any().any():
+            medians = cleaned.median(numeric_only=True)
+            cleaned = cleaned.fillna(medians)
+
+        if cleaned.isna().any().any():
+            cleaned = cleaned.fillna(0.0)
+
+        return cleaned
     
     def aggregate_data(
         self,
