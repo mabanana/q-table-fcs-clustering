@@ -35,7 +35,7 @@ class FCSLoader:
     def __init__(
         self,
         markers: Optional[List[str]] = None,
-        compensation: bool = True,
+        compensation: bool = False,
         transform: bool = True
     ):
         """
