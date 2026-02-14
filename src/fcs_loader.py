@@ -188,7 +188,7 @@ class FCSLoader:
         """
         Find column names that match the requested markers.
         
-        FCS files may have different naming conventions (e.g., "IFNa", "IFNa-PE", "IFNa PE").
+        FCS files may have different naming conventions (e.g., "CD45-ECD", "CD45 ECD", "CD45").
         This method tries to find the best match.
         
         Args:
@@ -214,7 +214,7 @@ class FCSLoader:
                     matched_columns.append(col)
                     break
             else:
-                # Try partial match (e.g., IFNa matches IFNa-PE)
+                # Try partial match (e.g., CD45-ECD matches CD45)
                 for col in columns:
                     if marker_lower in col.lower():
                         matched_columns.append(col)

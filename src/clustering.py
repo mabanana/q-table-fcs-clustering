@@ -317,7 +317,7 @@ def assign_diagnosis_from_clusters(
     positive_class: str = "positive"
 ) -> Tuple[dict, np.ndarray]:
     """
-    Map cluster labels to diagnosis (HIV+ or HIV-) using majority voting.
+    Map cluster labels to diagnosis (AML+ or AML-) using majority voting.
     
     Args:
         labels: Cluster labels
