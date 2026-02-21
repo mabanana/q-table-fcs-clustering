@@ -9,11 +9,13 @@ This project implements a complete reinforcement learning system for automated H
 ## Files Created
 
 ### Core Application
+
 - `main.py` - Main execution script with CLI (488 lines)
 - `config.yaml` - Configuration file with all parameters
 - `requirements.txt` - Python dependencies
 
 ### Source Modules (`src/`)
+
 1. `fcs_loader.py` - FCS file parsing (364 lines)
 2. `discretizer.py` - Clinical discretization (431 lines)
 3. `q_learning.py` - Q-learning algorithm (402 lines)
@@ -22,11 +24,13 @@ This project implements a complete reinforcement learning system for automated H
 6. `visualizer.py` - Visualization generation (516 lines)
 
 ### Tests (`tests/`)
+
 - `test_discretizer.py` - 19 tests for discretizer (311 lines)
 - `test_q_learning.py` - 19 tests for Q-learning (337 lines)
-- **Total: 38 unit tests, all passing**
+- **Total: 38 unit tests**
 
 ### Documentation
+
 - `README.md` - Comprehensive user guide (477 lines)
 - `data/README.md` - Data directory documentation
 - `output/README.md` - Output directory documentation
@@ -41,20 +45,24 @@ This project implements a complete reinforcement learning system for automated H
 ## Technical Highlights
 
 ### 1. Feature-Based Design
+
 - Configurable bins per marker
 - Flexible state encoding from selected features
 - Marker-specific discretization thresholds
 
 ### 2. Two-Phase Progressive Training
+
 - **Phase 1**: Quality optimization on HIV+ samples (silhouette score)
 - **Phase 2**: Diagnostic refinement on labeled samples (F1-score)
 
 ### 3. GPU Acceleration
+
 - cuML support for GPU clustering
 - Automatic CPU fallback
 - 10-100x speedup on compatible hardware
 
 ### 4. Comprehensive CLI
+
 ```bash
 python main.py --train-full --episodes 2000 --use-gpu
 python main.py --test --input data/mixed/ --output output/predictions.csv
@@ -62,6 +70,7 @@ python main.py --visualize --q-table output/q_table.pkl
 ```
 
 ### 5. Extensive Visualizations
+
 - Learning curves
 - Q-value heatmaps
 - Action distributions
@@ -73,6 +82,7 @@ python main.py --visualize --q-table output/q_table.pkl
 ## Educational Value
 
 This project demonstrates:
+
 1. **Reinforcement Learning**: Q-learning, exploration vs exploitation
 2. **Medical AI**: Real-world application to HIV diagnosis
 3. **Domain Knowledge Integration**: Marker-specific binning in ML system
@@ -98,10 +108,10 @@ from src.q_learning import QLearningAgent, create_action_space
 from src.trainer import ReinforcementClusteringPipeline
 
 # Initialize components
-loader = FCSLoader(markers=["IFNa", "TNFa"])
+loader = FCSLoader(markers=["FS Lin", "SS Log", "CD45-ECD"])
 discretizer = ClinicalDiscretizer(
-    feature_bins={"IFNa": [0, 0.5, 1.0, 2.0, np.inf], "TNFa": [0, 0.5, 1.0, 2.0, np.inf]},
-    state_features=["IFNa", "TNFa"]
+    feature_bins={"FS Lin": [0, 1, 2, 3, np.inf], "SS Log": [0, 1, 2, 3, np.inf]},
+    state_features=["FS Lin", "SS Log"]
 )
 action_space = create_action_space(2, 10)
 q_agent = QLearningAgent(n_states=16, n_actions=9)
@@ -113,7 +123,7 @@ trainer = ReinforcementClusteringPipeline(
     discretizer=discretizer,
     fcs_loader=loader,
     clustering_engine=ClusteringEngine(),
-    state_features=["IFNa", "TNFa"]
+    state_features=["FS Lin", "SS Log"]
 )
 
 # Train

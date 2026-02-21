@@ -7,7 +7,7 @@ A reinforcement learning approach to automated HIV status diagnosis using flow c
 This system uses Q-learning (a reinforcement learning algorithm) to learn optimal clustering strategies for HIV diagnosis based on flow cytometry standard (FCS) data. The approach is unique in that it:
 
 1. **Uses feature-based discretization**: Feature bins are configurable per marker rather than arbitrary quantiles
-2. **Employs two-phase progressive training**: 
+2. **Employs two-phase progressive training**:
    - Phase 1: Quality optimization on HIV+ samples only
    - Phase 2: Diagnostic refinement on labeled mixed samples
 3. **Supports GPU acceleration**: Can use RAPIDS cuML for faster clustering on compatible GPUs
@@ -15,7 +15,7 @@ This system uses Q-learning (a reinforcement learning algorithm) to learn optima
 
 ## 🔬 Scientific Motivation
 
-Flow cytometry measures immune markers (e.g., IFNa, IL6, TNFa, CD123, MHCII) that reflect inflammation and activation states relevant to HIV. This system learns clustering strategies from these marker patterns rather than relying on fixed clinical thresholds.
+Flow cytometry measures channel/header intensities from raw FCS files (e.g., FS Lin, SS Log, IgG1-FITC, CD45-ECD). This system learns clustering strategies from these measured channel patterns rather than relying on fixed clinical thresholds.
 
 Traditional diagnosis uses fixed thresholds, but this system learns optimal clustering strategies through reinforcement learning.
 
@@ -28,6 +28,7 @@ pip install -r requirements.txt
 ```
 
 ### Core Dependencies:
+
 - `numpy>=1.21.0` - Numerical computing
 - `pandas>=1.3.0` - Data manipulation
 - `scikit-learn>=1.0.0` - Machine learning algorithms
@@ -37,6 +38,7 @@ pip install -r requirements.txt
 - `tqdm>=4.62.0` - Progress bars
 
 ### Optional (GPU Acceleration):
+
 - `cuml>=23.0.0` - RAPIDS cuML for GPU clustering
 - `cudf>=23.0.0` - RAPIDS cuDF for GPU DataFrames
 
@@ -104,11 +106,13 @@ python main.py --train-full --episodes 2000 --use-gpu
 ### Phase-by-Phase Training
 
 **Phase 1 Only** (Quality learning on HIV+ data):
+
 ```bash
 python main.py --train-phase1 --episodes 1000
 ```
 
 **Phase 2 Only** (Diagnostic refinement - requires Phase 1 Q-table):
+
 ```bash
 python main.py --train-phase2 --episodes 1000 --q-table output/q_table.pkl
 ```
@@ -149,6 +153,7 @@ python main.py --train-full --episodes 5000
 Edit `config.yaml` to customize:
 
 ### Data Paths
+
 ```yaml
 data:
   positive: "data/positive/"
@@ -157,31 +162,49 @@ data:
 ```
 
 ### Feature Discretization Thresholds
+
 ```yaml
+markers:
+  use_for_clustering:
+    [
+      "FS Lin",
+      "SS Log",
+      "IgG1-FITC",
+      "IgG1-PE",
+      "CD45-ECD",
+      "IgG1-PC5",
+      "IgG1-PC7",
+    ]
+
 discretization:
-  state_features: ["IFNa", "TNFa"]
+  state_features: ["FS Lin", "SS Log", "CD45-ECD"]
   feature_bins:
-    IFNa: [0, 0.5, 1.0, 2.0, 999999]
-    TNFa: [0, 0.5, 1.0, 2.0, 999999]
+    FS Lin: [0, 1, 2, 3, 4, 999999]
+    SS Log: [0, 1, 2, 3, 4, 999999]
+    CD45-ECD: [0, 1, 2, 3, 4, 999999]
 ```
 
+**Important**: Marker names in `markers.use_for_clustering`, `discretization.state_features`, and `discretization.feature_bins` must match raw FCS column headers. The loader enforces strict matching and raises an error if requested headers are missing.
+
 ### Q-Learning Parameters
+
 ```yaml
 q_learning:
-  epsilon_start: 0.3      # Initial exploration rate
-  epsilon_end: 0.05       # Minimum exploration rate
-  epsilon_decay: 0.995    # Decay per episode
-  learning_rate: 0.1      # Alpha (α)
-  discount_factor: 0.9    # Gamma (γ)
+  epsilon_start: 0.3 # Initial exploration rate
+  epsilon_end: 0.05 # Minimum exploration rate
+  epsilon_decay: 0.995 # Decay per episode
+  learning_rate: 0.1 # Alpha (α)
+  discount_factor: 0.9 # Gamma (γ)
   n_clusters_range: [2, 10]
 ```
 
 ### Training Parameters
+
 ```yaml
 training:
-  stage1_episodes: 1000   # Phase 1 iterations
-  stage2_episodes: 1000   # Phase 2 iterations
-  batch_size: 10          # Samples per iteration
+  stage1_episodes: 1000 # Phase 1 iterations
+  stage2_episodes: 1000 # Phase 2 iterations
+  batch_size: 10 # Samples per iteration
 ```
 
 ## 🧠 How It Works
@@ -193,6 +216,7 @@ Continuous flow cytometry measurements are discretized into bins defined per fea
 ### 2. State Space
 
 States encode discretized feature combinations:
+
 - **2 features**: $b^2$ states
 - **3 features**: $b^3$ states
 
@@ -205,11 +229,13 @@ Actions represent cluster count selection: k ∈ {2, 3, 4, 5, 6, 7, 8, 9, 10}
 ### 4. Q-Learning Algorithm
 
 **Update Rule:**
+
 ```
 Q(s,a) ← Q(s,a) + α[r + γ·max Q(s',a') - Q(s,a)]
 ```
 
 Where:
+
 - s: current state
 - a: selected action (cluster count)
 - r: reward (silhouette score or F1-score)
@@ -217,6 +243,7 @@ Where:
 - γ: discount factor (0.9)
 
 **Exploration Strategy:** ε-greedy with decay
+
 - Start: ε = 0.3 (30% random exploration)
 - End: ε = 0.05 (5% exploration)
 - Decay: multiply by 0.995 each episode
@@ -224,12 +251,14 @@ Where:
 ### 5. Two-Phase Progressive Training
 
 **Phase 1: Quality Optimization**
+
 - Data: HIV+ samples only
 - Objective: Learn cluster counts that maximize silhouette score
 - Reward: Silhouette score (cluster quality metric)
 - Purpose: Understand structure of positive samples
 
 **Phase 2: Diagnostic Refinement**
+
 - Data: Mixed labeled samples (HIV+ and HIV-)
 - Objective: Fine-tune for diagnostic accuracy
 - Reward: F1-score or Matthews Correlation Coefficient
@@ -242,7 +271,7 @@ After successful training, you should see:
 1. **Learning Curves**: Rewards increasing over iterations
 2. **Q-Value Convergence**: Q-table stabilizing with clear policies
 3. **Action Distribution**: Preference for certain cluster counts
-4. **Diagnostic Performance**: 
+4. **Diagnostic Performance**:
    - Accuracy: 70-90% (depends on data quality)
    - F1-Score: 0.65-0.85
    - Silhouette Score: 0.3-0.6 (higher = better separation)
@@ -269,6 +298,7 @@ output/
 ### Prediction Output Format
 
 `results.csv` contains:
+
 - `filename`: Original FCS filename
 - `encoded_state`: Discrete state representation
 - `selected_cluster_count`: Chosen k value
@@ -297,22 +327,28 @@ pytest tests/ --cov=src --cov-report=html
 ## 🛠️ Troubleshooting
 
 ### Problem: "No FCS files found"
+
 **Solution**: Ensure FCS files are in correct directories and have `.fcs` extension
 
 ### Problem: "cuML not available"
+
 **Solution**: Either install RAPIDS cuML or remove `--use-gpu` flag (will use CPU)
 
 ### Problem: "No labeled data found"
+
 **Solution**: For Phase 2, filenames must contain "positive" or "negative"
 
 ### Problem: Poor performance
+
 **Solutions**:
+
 - Increase training episodes: `--episodes 5000`
 - Adjust learning parameters in `config.yaml`
 - Ensure sufficient labeled training data (>50 samples recommended)
-- Check FCS file quality and marker availability
+- Check FCS file quality and exact header availability (names must match raw FCS columns)
 
 ### Problem: "ImportError: fcsparser"
+
 **Solution**: `pip install fcsparser`
 
 ## 🎓 Science Fair Presentation Tips
@@ -332,11 +368,13 @@ pytest tests/ --cov=src --cov-report=html
 ## 📚 References
 
 ### Scientific Background
+
 1. **WHO HIV Staging**: [WHO Guidelines](https://www.who.int/hiv/pub/guidelines/HIVstaging150307.pdf)
 2. **Flow Cytometry**: Understanding immune cell populations
 3. **FlowCAP Challenge**: Community benchmark for flow cytometry analysis
 
 ### Technical References
+
 1. **Q-Learning**: Watkins & Dayan (1992) - "Q-learning"
 2. **Reinforcement Learning**: Sutton & Barto - "Reinforcement Learning: An Introduction"
 3. **FCS Format**: ISAC - Flow Cytometry Standard

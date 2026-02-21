@@ -93,7 +93,13 @@ def initialize_components(config: dict, use_gpu: bool = True):
             "state_features must contain 2 or 3 feature names for state encoding. "
             f"Got: {state_features}"
         )
-    bin_sizes = [max(len(feature_bins.get(feature, [])) - 1, 1) for feature in state_features]
+    bin_sizes = []
+    for feature in state_features:
+        feature_edges = feature_bins.get(feature)
+        if feature_edges and len(feature_edges) >= 2:
+            bin_sizes.append(len(feature_edges) - 1)
+        else:
+            bin_sizes.append(len(ClinicalDiscretizer.DEFAULT_FEATURE_BINS) - 1)
     n_states = 1
     for size in bin_sizes:
         n_states *= size

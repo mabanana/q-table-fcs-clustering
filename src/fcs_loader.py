@@ -22,6 +22,15 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+CHANNEL_ALIASES = {
+    "igg1-fitc": ["fitc", "fl1 log", "fl1"],
+    "igg1-pe": ["pe", "fl2 log", "fl2"],
+    "cd45-ecd": ["ecd", "fl3 log", "fl3", "7aad"],
+    "igg1-pc5": ["pc5", "fl4 log", "fl4"],
+    "igg1-pc7": ["pc7", "fl5 log", "fl5"],
+}
+
+
 class FCSLoader:
     """
     Handles loading and batch processing of FCS files.
@@ -36,7 +45,8 @@ class FCSLoader:
         self,
         markers: Optional[List[str]] = None,
         compensation: bool = False,
-        transform: bool = True
+        transform: bool = True,
+        strict_markers: bool = True
     ):
         """
         Initialize the FCS loader.
@@ -45,6 +55,7 @@ class FCSLoader:
             markers: List of marker names to extract. If None, extracts all markers.
             compensation: Whether to apply compensation if available in FCS file
             transform: Whether to apply log transformation to data
+            strict_markers: Whether to require all requested markers to be present
         """
         if not FCS_AVAILABLE:
             raise ImportError(
@@ -55,6 +66,7 @@ class FCSLoader:
         self.markers = markers
         self.compensation = compensation
         self.transform = transform
+        self.strict_markers = strict_markers
         logger.info(f"Initialized FCSLoader with markers: {markers}")
     
     def load_fcs_file(self, file_path: str) -> Tuple[pd.DataFrame, Dict]:
@@ -87,13 +99,25 @@ class FCSLoader:
             
             # Extract only requested markers if specified
             if self.markers:
-                available_markers = self._find_marker_columns(data.columns, self.markers)
-                if not available_markers:
+                marker_mapping = self._find_marker_columns(data.columns, self.markers)
+                missing_markers = [marker for marker in self.markers if marker not in marker_mapping]
+
+                if not marker_mapping:
                     raise ValueError(
                         f"None of the requested markers {self.markers} found in {file_path}"
                     )
-                data = data[available_markers]
-                logger.debug(f"Extracted markers: {available_markers}")
+
+                if missing_markers and self.strict_markers:
+                    raise ValueError(
+                        "Missing requested markers "
+                        f"{missing_markers} in {file_path}. "
+                        f"Available headers: {list(data.columns)}"
+                    )
+
+                selected_columns = [marker_mapping[m] for m in self.markers if m in marker_mapping]
+                data = data[selected_columns]
+                data = data.rename(columns={v: k for k, v in marker_mapping.items()})
+                logger.debug(f"Extracted markers: {list(marker_mapping.keys())}")
             
             # Apply transformation if requested
             if self.transform:
@@ -184,7 +208,7 @@ class FCSLoader:
         self,
         columns: pd.Index,
         markers: List[str]
-    ) -> List[str]:
+    ) -> Dict[str, str]:
         """
         Find column names that match the requested markers.
         
@@ -196,32 +220,49 @@ class FCSLoader:
             markers: Requested marker names
             
         Returns:
-            List of matching column names
+            Mapping of requested marker -> matched column name
         """
-        matched_columns = []
-        
+        matched_columns: Dict[str, str] = {}
+
         for marker in markers:
-            marker_lower = marker.lower()
-            
-            # Try exact match first
-            if marker in columns:
-                matched_columns.append(marker)
-                continue
-            
-            # Try case-insensitive match
-            for col in columns:
-                if marker_lower == col.lower():
-                    matched_columns.append(col)
-                    break
-            else:
-                # Try partial match (e.g., IFNa matches IFNa-PE)
-                for col in columns:
-                    if marker_lower in col.lower():
-                        matched_columns.append(col)
-                        logger.debug(f"Matched marker '{marker}' to column '{col}'")
-                        break
+            matched_column = self._resolve_marker_column(columns, marker)
+            if matched_column:
+                matched_columns[marker] = matched_column
+                if matched_column.lower() != marker.lower():
+                    logger.debug(f"Matched marker '{marker}' to column '{matched_column}'")
         
         return matched_columns
+
+    def _resolve_marker_column(self, columns: pd.Index, marker: str) -> Optional[str]:
+        """Resolve a marker to the best available column in a file."""
+        marker_lower = marker.lower().strip()
+
+        # 1) Exact match
+        if marker in columns:
+            return marker
+
+        # 2) Case-insensitive exact match
+        for col in columns:
+            if marker_lower == col.lower().strip():
+                return col
+
+        # 3) Partial match
+        for col in columns:
+            if marker_lower in col.lower():
+                return col
+
+        # 4) Detector/channel alias fallback
+        alias_tokens = CHANNEL_ALIASES.get(marker_lower, [])
+        for token in alias_tokens:
+            token_lower = token.lower()
+            for col in columns:
+                col_lower = col.lower()
+                if token_lower == col_lower:
+                    return col
+                if token_lower in col_lower:
+                    return col
+
+        return None
     
     def _apply_transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """
