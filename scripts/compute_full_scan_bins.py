@@ -19,7 +19,7 @@ def main():
 
     markers = config["markers"]["use_for_clustering"]
 
-    meta = pd.read_csv("data/HEUvsUE.csv")
+    meta = pd.read_csv("data/AML/AML.csv")
     meta = meta[["FCSFileName", "Label"]].dropna()
     meta["FCSFileName"] = meta["FCSFileName"].astype(str).str.zfill(4)
     meta["filename"] = meta["FCSFileName"] + ".FCS"
@@ -29,7 +29,7 @@ def main():
     summaries = []
     missing_files = 0
     for fname in tqdm(meta["filename"], desc="Scanning FCS files"):
-        file_path = Path("data/unsorted") / fname
+        file_path = Path("data/AML/FCS") / fname
         if not file_path.exists():
             missing_files += 1
             continue
@@ -54,8 +54,8 @@ def main():
     X = X.fillna(X.median())
 
     labels = merged["Label"].astype(str)
-    if labels.str.contains("HEU", case=False, na=False).any():
-        y = labels.str.contains("HEU", case=False, na=False).astype(int)
+    if labels.str.contains("aml", case=False, na=False).any():
+        y = labels.str.contains("aml", case=False, na=False).astype(int)
     else:
         y = pd.to_numeric(labels, errors="coerce")
         y = (y > 0).astype(int)
