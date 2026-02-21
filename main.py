@@ -245,6 +245,8 @@ def execute_visualization(q_agent, trainer, action_space, discretizer, config: d
     viz_engine.plot_q_value_heatmap(
         q_agent.q_table,
         action_labels,
+        n_states=q_agent.n_states,
+        n_state_features=len(discretizer.state_features) if discretizer.state_features else None,
         save_filename="q_value_heatmap.png"
     )
     
@@ -273,7 +275,119 @@ def execute_visualization(q_agent, trainer, action_space, discretizer, config: d
             output_filename="training_summary.html"
         )
     
+    # Combined reward vs episodes plot (both phases)
+    if trainer.phase1_progress or trainer.phase2_progress:
+        logger.info("Creating combined reward vs episodes plot...")
+        viz_engine.plot_reward_vs_episodes(
+            trainer.phase1_progress,
+            trainer.phase2_progress,
+            phase1_reward_label="Phase 1: Silhouette Score",
+            phase2_reward_label="Phase 2: F1 Score",
+            save_filename="reward_vs_episodes.png"
+        )
+    
+    # Per-phase accuracy/F1 vs episodes
+    if trainer.phase2_progress:
+        logger.info("Creating Phase 2 F1 vs episodes plot...")
+        viz_engine.plot_metric_vs_episodes(
+            [],
+            trainer.phase2_progress,
+            metric_key="average_payoff",
+            phase2_label="Phase 2: Diagnostic Refinement",
+            y_label="F1 Score",
+            save_filename="phase2_f1_vs_episodes.png"
+        )
+    
     logger.info("Visualization generation completed")
+
+
+def execute_poster_plots(
+    q_agent, trainer, action_space, discretizer, config: dict,
+    input_dir: str = None
+):
+    """
+    Generate all presentation-ready poster plots.
+
+    Calls execute_visualization for Q-table / history plots and, when
+    *input_dir* points to a directory with FCS files, additionally produces
+    a side-by-side 2D scatter comparison between a fixed-k baseline and the
+    Q-table chosen k.
+
+    Args:
+        q_agent: Trained Q-learning agent
+        trainer: ReinforcementClusteringPipeline instance
+        action_space: Action-to-cluster mapping
+        discretizer: ClinicalDiscretizer instance
+        config: Configuration dictionary
+        input_dir: Optional directory with FCS files for scatter comparison
+    """
+    logger = logging.getLogger(__name__)
+    logger.info("=" * 80)
+    logger.info("GENERATING POSTER PLOTS")
+    logger.info("=" * 80)
+
+    # Standard Q-table / history visualizations
+    execute_visualization(q_agent, trainer, action_space, discretizer, config)
+
+    # Data-dependent plots (scatter comparison) when input directory provided
+    if input_dir and os.path.isdir(input_dir):
+        viz_config = config['visualization']
+        viz_engine = VisualizationEngine(
+            output_directory=viz_config['output_dir'],
+            dpi=viz_config['dpi'],
+            figure_dimensions=tuple(viz_config['figure_size']),
+            color_palette=viz_config['color_scheme']
+        )
+
+        try:
+            fcs_data = trainer.data_reader.load_directory(input_dir)
+            if not fcs_data:
+                logger.warning(f"No FCS files found in {input_dir}; skipping scatter comparison")
+            else:
+                summary = trainer.data_reader.aggregate_data(fcs_data, aggregation="median")
+                cluster_inputs = trainer._build_feature_matrix(summary)
+
+                binned = trainer.feature_binner.discretize_data(
+                    summary, feature_names=trainer.state_features
+                )
+                states = trainer.feature_binner.get_state_from_data(
+                    binned, feature_names=trainer.state_features
+                )
+
+                # Q-table chosen k for first sample
+                q_action = q_agent.choose_action(int(states[0]), explore=False)
+                q_k = action_space[q_action]
+                baseline_k = config.get('visualization', {}).get('baseline_k', 4)
+
+                q_labels, _, _ = trainer.cluster_computer.kmeans(
+                    cluster_inputs, n_clusters=q_k, random_state=42
+                )
+                baseline_labels, _, _ = trainer.cluster_computer.kmeans(
+                    cluster_inputs, n_clusters=baseline_k, random_state=42
+                )
+
+                sample_id = str(summary.iloc[0].get('filename', 'Sample 1'))
+                markers_cfg = config.get('markers', {})
+                clustering_markers = markers_cfg.get('use_for_clustering', ['FS Lin', 'SS Log'])
+                x_marker = clustering_markers[0] if clustering_markers else 'FS Lin'
+                y_marker = clustering_markers[1] if len(clustering_markers) > 1 else 'SS Log'
+
+                logger.info("Creating scatter comparison plot...")
+                viz_engine.plot_marker_scatter_comparison(
+                    summary,
+                    baseline_labels,
+                    q_labels,
+                    feature_x=x_marker,
+                    feature_y=y_marker,
+                    sample_id=sample_id,
+                    baseline_k=baseline_k,
+                    q_k=q_k,
+                    save_filename="scatter_comparison.png"
+                )
+        except Exception as exc:
+            logger.warning(f"Could not generate scatter comparison: {exc}")
+
+    logger.info("Poster plot generation completed")
 
 
 def main():
@@ -294,6 +408,10 @@ Examples:
   
   # Generate visualizations
   python main.py --visualize --q-table output/q_table.pkl
+  
+  # Generate all poster-quality plots (add --input for scatter comparison)
+  python main.py --make-poster-plots --q-table output/q_table.pkl
+  python main.py --make-poster-plots --q-table output/q_table.pkl --input data/mixed/
         """
     )
     
@@ -309,6 +427,9 @@ Examples:
                            help='Run inference on unlabeled data')
     mode_group.add_argument('--visualize', action='store_true',
                            help='Generate all visualizations')
+    mode_group.add_argument('--make-poster-plots', action='store_true',
+                           help='Generate all presentation-ready poster plots '
+                                '(use --input for 2D scatter comparison)')
     
     # Configuration options
     config_group = parser.add_argument_group('Configuration')
@@ -424,6 +545,20 @@ Examples:
             q_agent.load(args.q_table)
             
             execute_visualization(q_agent, trainer, action_space, discretizer, config)
+        
+        elif args.make_poster_plots:
+            # Poster-quality plots (optionally with 2D scatter from --input data)
+            if not os.path.exists(args.q_table):
+                logger.error(f"Q-table not found at {args.q_table}")
+                sys.exit(1)
+            
+            logger.info(f"Loading Q-table from: {args.q_table}")
+            q_agent.load(args.q_table)
+            
+            execute_poster_plots(
+                q_agent, trainer, action_space, discretizer, config,
+                input_dir=args.input
+            )
             
         else:
             logger.error("No execution mode specified. Use --help for usage information.")
