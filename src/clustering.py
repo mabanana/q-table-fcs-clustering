@@ -62,7 +62,8 @@ class ClusteringEngine:
         data: np.ndarray,
         n_clusters: int,
         random_state: int = 42,
-        max_iter: int = 300
+        max_iter: int = 300,
+        init_centers: Optional[np.ndarray] = None
     ) -> Tuple[np.ndarray, float, object]:
         """
         Perform K-means clustering.
@@ -72,11 +73,12 @@ class ClusteringEngine:
             n_clusters: Number of clusters
             random_state: Random seed for reproducibility
             max_iter: Maximum number of iterations
+            init_centers: Optional explicit initial centers (shape: n_clusters x n_features)
             
         Returns:
             Tuple of (labels, inertia, model)
         """
-        if self.use_gpu:
+        if self.use_gpu and init_centers is None:
             try:
                 # Convert to cuDF DataFrame for GPU processing
                 data_gpu = cudf.DataFrame(data)
@@ -107,14 +109,31 @@ class ClusteringEngine:
                     )
                 else:
                     raise
+
+        if init_centers is not None:
+            init_centers = np.asarray(init_centers, dtype=float)
+            if init_centers.shape != (n_clusters, data.shape[1]):
+                raise ValueError(
+                    "init_centers has invalid shape. "
+                    f"Expected {(n_clusters, data.shape[1])}, got {init_centers.shape}"
+                )
         
         # CPU K-means (sklearn)
-        model = SKLearnKMeans(
-            n_clusters=n_clusters,
-            random_state=random_state,
-            max_iter=max_iter,
-            n_init=10
-        )
+        if init_centers is not None:
+            model = SKLearnKMeans(
+                n_clusters=n_clusters,
+                init=init_centers,
+                random_state=random_state,
+                max_iter=max_iter,
+                n_init=1
+            )
+        else:
+            model = SKLearnKMeans(
+                n_clusters=n_clusters,
+                random_state=random_state,
+                max_iter=max_iter,
+                n_init=10
+            )
         labels = model.fit_predict(data)
         inertia = model.inertia_
         

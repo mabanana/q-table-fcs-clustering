@@ -6,7 +6,7 @@ Implements the Q-learning reinforcement learning algorithm for cluster selection
 
 import logging
 import pickle
-from typing import Dict, Tuple, Optional, List
+from typing import Dict, Tuple, Optional, List, Union
 import numpy as np
 import random
 
@@ -335,27 +335,47 @@ class QLearningAgent:
         return stats
 
 
-def create_action_space(min_clusters: int, max_clusters: int) -> Dict[int, int]:
+def create_action_space(
+    min_clusters: int,
+    max_clusters: int,
+    seeding_strategies: Optional[List[str]] = None
+) -> Dict[int, Union[int, Dict[str, Union[int, str]]]]:
     """
-    Create a mapping from action indices to cluster counts.
+    Create a mapping from action indices to clustering decisions.
     
     Args:
         min_clusters: Minimum number of clusters
         max_clusters: Maximum number of clusters
+        seeding_strategies: Optional list of seeding strategy names
         
     Returns:
-        Dictionary mapping action index to cluster count
+        Dictionary mapping action index to either cluster count (legacy)
+        or a decision dict with cluster count and seeding strategy
     """
-    action_to_clusters = {
-        i: n_clusters
-        for i, n_clusters in enumerate(range(min_clusters, max_clusters + 1))
-    }
+    if seeding_strategies:
+        action_to_clusters = {}
+        action_index = 0
+        for n_clusters in range(min_clusters, max_clusters + 1):
+            for seeding_strategy in seeding_strategies:
+                action_to_clusters[action_index] = {
+                    "cluster_count": n_clusters,
+                    "seeding_strategy": seeding_strategy,
+                }
+                action_index += 1
+    else:
+        action_to_clusters = {
+            i: n_clusters
+            for i, n_clusters in enumerate(range(min_clusters, max_clusters + 1))
+        }
     
     logger.info(f"Created action space: {action_to_clusters}")
     return action_to_clusters
 
 
-def clusters_to_action(n_clusters: int, action_space: Dict[int, int]) -> int:
+def clusters_to_action(
+    n_clusters: int,
+    action_space: Dict[int, Union[int, Dict[str, Union[int, str]]]]
+) -> int:
     """
     Convert a cluster count to an action index.
     
@@ -366,8 +386,11 @@ def clusters_to_action(n_clusters: int, action_space: Dict[int, int]) -> int:
     Returns:
         Action index
     """
-    for action, clusters in action_space.items():
-        if clusters == n_clusters:
+    for action, action_value in action_space.items():
+        if isinstance(action_value, dict):
+            if int(action_value.get("cluster_count", -1)) == n_clusters:
+                return action
+        elif action_value == n_clusters:
             return action
     
     raise ValueError(f"Cluster count {n_clusters} not in action space")

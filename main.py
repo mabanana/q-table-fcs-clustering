@@ -84,7 +84,8 @@ def initialize_components(config: dict, use_gpu: bool = True):
     
     # Create action space
     min_clusters, max_clusters = q_config['n_clusters_range']
-    action_space = create_action_space(min_clusters, max_clusters)
+    seeding_strategies = q_config.get('seeding_strategies', ['predicted_state', 'predicted_global'])
+    action_space = create_action_space(min_clusters, max_clusters, seeding_strategies=seeding_strategies)
     n_actions = len(action_space)
     
     # Determine number of states (bins per feature)
@@ -241,7 +242,15 @@ def execute_visualization(q_agent, trainer, action_space, discretizer, config: d
     
     # Plot Q-value heatmap
     logger.info("Creating Q-value heatmap...")
-    action_labels = [f"k={action_space[i]}" for i in range(len(action_space))]
+    action_labels = []
+    for i in range(len(action_space)):
+        action_value = action_space[i]
+        if isinstance(action_value, dict):
+            action_labels.append(
+                f"k={action_value['cluster_count']}|seed={action_value['seeding_strategy']}"
+            )
+        else:
+            action_labels.append(f"k={action_value}")
     viz_engine.plot_q_value_heatmap(
         q_agent.q_table,
         action_labels,
@@ -255,7 +264,15 @@ def execute_visualization(q_agent, trainer, action_space, discretizer, config: d
         for action in q_agent.episode_actions:
             action_counts[action] = action_counts.get(action, 0) + 1
         
-        action_label_map = {i: f"k={action_space[i]}" for i in range(len(action_space))}
+        action_label_map = {}
+        for i in range(len(action_space)):
+            action_value = action_space[i]
+            if isinstance(action_value, dict):
+                action_label_map[i] = (
+                    f"k={action_value['cluster_count']}|seed={action_value['seeding_strategy']}"
+                )
+            else:
+                action_label_map[i] = f"k={action_value}"
         viz_engine.plot_action_distribution(
             action_counts,
             action_label_map,

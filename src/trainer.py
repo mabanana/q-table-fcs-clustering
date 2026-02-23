@@ -8,7 +8,7 @@ Phase 2: Diagnosis-driven refinement on heterogeneous samples
 
 import logging
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -32,7 +32,7 @@ class ReinforcementClusteringPipeline:
     def __init__(
         self,
         q_agent: QLearningAgent,
-        action_space: Dict[int, int],
+        action_space: Dict[int, Union[int, Dict[str, Union[int, str]]]],
         discretizer: ClinicalDiscretizer,
         fcs_loader: FCSLoader,
         clustering_engine: ClusteringEngine,
@@ -119,6 +119,7 @@ class ReinforcementClusteringPipeline:
         
         # Reinforcement learning loop
         iteration_logs = []
+        seed_cache: Dict[Tuple[int, int], np.ndarray] = {}
         
         progress_bar = tqdm(total=learning_iterations, desc="Phase 1")
         for iteration_num in range(learning_iterations):
@@ -136,7 +137,7 @@ class ReinforcementClusteringPipeline:
                 
                 # Decision: select cluster count
                 chosen_action = self.decision_maker.choose_action(current_state, explore=True)
-                cluster_count = self.cluster_action_map[chosen_action]
+                cluster_count, seeding_strategy = self._resolve_action(chosen_action)
                 selected_actions.append(chosen_action)
                 
                 # Execute clustering
@@ -144,7 +145,15 @@ class ReinforcementClusteringPipeline:
                     cluster_labels, within_variance, _ = self.cluster_computer.kmeans(
                         cluster_inputs,
                         n_clusters=cluster_count,
-                        random_state=42
+                        random_state=42,
+                        init_centers=self._get_predicted_seed_centers(
+                            cluster_inputs,
+                            encoded_states,
+                            current_state,
+                            cluster_count,
+                            seed_cache,
+                            strategy=seeding_strategy
+                        )
                     )
                     
                     # Compute quality-based payoff
@@ -267,6 +276,7 @@ class ReinforcementClusteringPipeline:
         
         # Reinforcement learning loop
         iteration_logs = []
+        seed_cache: Dict[Tuple[int, int], np.ndarray] = {}
         
         progress_bar = tqdm(total=learning_iterations, desc="Phase 2")
         for iteration_num in range(learning_iterations):
@@ -284,7 +294,7 @@ class ReinforcementClusteringPipeline:
                 
                 # Decision: select cluster count
                 chosen_action = self.decision_maker.choose_action(current_state, explore=True)
-                cluster_count = self.cluster_action_map[chosen_action]
+                cluster_count, seeding_strategy = self._resolve_action(chosen_action)
                 selected_actions.append(chosen_action)
                 
                 # Execute clustering
@@ -292,7 +302,15 @@ class ReinforcementClusteringPipeline:
                     cluster_labels, within_variance, _ = self.cluster_computer.kmeans(
                         cluster_inputs,
                         n_clusters=cluster_count,
-                        random_state=42
+                        random_state=42,
+                        init_centers=self._get_predicted_seed_centers(
+                            cluster_inputs,
+                            encoded_states,
+                            current_state,
+                            cluster_count,
+                            seed_cache,
+                            strategy=seeding_strategy
+                        )
                     )
                     
                     # Map clusters to diagnoses via majority voting
@@ -406,17 +424,26 @@ class ReinforcementClusteringPipeline:
         
         # Generate predictions using learned policy
         prediction_records = []
+        seed_cache: Dict[Tuple[int, int], np.ndarray] = {}
         
         for sample_idx, current_state in enumerate(encoded_states):
             # Use learned policy (no exploration)
             chosen_action = self.decision_maker.choose_action(current_state, explore=False)
-            cluster_count = self.cluster_action_map[chosen_action]
+            cluster_count, seeding_strategy = self._resolve_action(chosen_action)
             
             # Cluster all samples
             cluster_labels, _, _ = self.cluster_computer.kmeans(
                 cluster_inputs,
                 n_clusters=cluster_count,
-                random_state=42
+                random_state=42,
+                init_centers=self._get_predicted_seed_centers(
+                    cluster_inputs,
+                    encoded_states,
+                    current_state,
+                    cluster_count,
+                    seed_cache,
+                    strategy=seeding_strategy
+                )
             )
             
             # Get this sample's cluster assignment
@@ -429,6 +456,7 @@ class ReinforcementClusteringPipeline:
                 'filename': summary_stats.iloc[sample_idx]['filename'],
                 'encoded_state': current_state,
                 'selected_cluster_count': cluster_count,
+                'selected_seeding_strategy': seeding_strategy,
                 'assigned_cluster': assigned_cluster,
                 'predicted_hiv_status': predicted_status
             })
@@ -507,3 +535,78 @@ class ReinforcementClusteringPipeline:
             )
 
         return feature_df.values
+
+    def _get_predicted_seed_centers(
+        self,
+        cluster_inputs: np.ndarray,
+        encoded_states: np.ndarray,
+        current_state: int,
+        n_clusters: int,
+        seed_cache: Dict[Tuple[int, int, str], np.ndarray],
+        strategy: str = "predicted_state"
+    ) -> np.ndarray:
+        """Return deterministic predicted initial centers for K-means."""
+        cache_key = (int(current_state), int(n_clusters), strategy)
+        if cache_key in seed_cache:
+            return seed_cache[cache_key]
+
+        if strategy == "predicted_global":
+            state_points = cluster_inputs
+        else:
+            state_mask = encoded_states == current_state
+            state_points = cluster_inputs[state_mask]
+
+            if state_points.shape[0] < n_clusters:
+                state_points = cluster_inputs
+
+        centers = self._farthest_point_centers(state_points, n_clusters)
+        seed_cache[cache_key] = centers
+        return centers
+
+    def _resolve_action(self, chosen_action: int) -> Tuple[int, str]:
+        """Resolve action index into (cluster_count, seeding_strategy)."""
+        action_value = self.cluster_action_map[chosen_action]
+        if isinstance(action_value, dict):
+            cluster_count = int(action_value.get("cluster_count", 2))
+            seeding_strategy = str(action_value.get("seeding_strategy", "predicted_state"))
+            return cluster_count, seeding_strategy
+
+        return int(action_value), "predicted_state"
+
+    def _farthest_point_centers(self, data: np.ndarray, n_clusters: int) -> np.ndarray:
+        """Deterministic center prediction via mean anchor + farthest-point expansion."""
+        if data.shape[0] < n_clusters:
+            raise ValueError(
+                f"Cannot create {n_clusters} centers from only {data.shape[0]} samples"
+            )
+
+        selected_indices: List[int] = []
+
+        # First center: point closest to global mean (deterministic)
+        mean_point = np.mean(data, axis=0)
+        first_idx = int(np.argmin(np.linalg.norm(data - mean_point, axis=1)))
+        selected_indices.append(first_idx)
+
+        # Next centers: farthest-point traversal
+        while len(selected_indices) < n_clusters:
+            selected_points = data[selected_indices]
+            distances = np.linalg.norm(
+                data[:, np.newaxis, :] - selected_points[np.newaxis, :, :],
+                axis=2
+            )
+            min_distances = np.min(distances, axis=1)
+
+            # Avoid selecting the same index again
+            min_distances[selected_indices] = -np.inf
+            next_idx = int(np.argmax(min_distances))
+
+            if min_distances[next_idx] == -np.inf:
+                # Degenerate case: duplicate points everywhere
+                for fallback_idx in range(data.shape[0]):
+                    if fallback_idx not in selected_indices:
+                        next_idx = fallback_idx
+                        break
+
+            selected_indices.append(next_idx)
+
+        return data[selected_indices]
