@@ -93,6 +93,40 @@ data/
 
 **Important**: For labeled training data (Phase 2), filenames must contain "positive" or "negative" to indicate HIV status.
 
+## 📊 Presentation Graphics
+
+Running `--train-full` or `--make-poster-plots` automatically generates the following presentation-ready artifacts under `output/plots/`.
+
+### CLI Options
+
+```bash
+# After training: generate all poster-quality plots from a saved Q-table
+python main.py --make-poster-plots --q-table output/q_table.pkl
+
+# Also generate a 2D scatter comparison using patient FCS data
+python main.py --make-poster-plots --q-table output/q_table.pkl --input data/mixed/
+```
+
+### Generated Outputs
+
+| File | Description |
+|------|-------------|
+| `output/performance_summary.csv` | Performance table: Accuracy, F1, MCC, Mean k for each method |
+| `output/plots/performance_summary.png` | Same table rendered as a PNG figure |
+| `output/plots/reward_vs_episodes.png` | Combined reward vs episode for Phase 1 (silhouette) & Phase 2 (F1), with phase boundary and moving-average smoothing |
+| `output/plots/phase2_f1_vs_episodes.png` | F1 score over Phase 2 episodes with moving-average smoothing |
+| `output/plots/q_value_heatmap.png` | Q-table heatmap with `k=2…10` x-axis labels and state-encoding subtitle |
+| `output/plots/action_distribution.png` | Bar chart of cluster-count selections with k-value x-axis labels |
+| `output/plots/phase1_learning_curve.png` | Phase 1 cumulative & average silhouette reward |
+| `output/plots/phase2_learning_curve.png` | Phase 2 cumulative & average F1 reward |
+| `output/plots/scatter_comparison.png` | Side-by-side 2D scatter of baseline-k vs Q-chosen-k clustering (requires `--input`) |
+
+### Style
+
+All plots use consistent 10×8 inch figures, 300 DPI, readable fonts, labelled axes, and legends where applicable.  The Q-table heatmap includes a subtitle describing the state encoding (e.g. *"125 states, 3-feature state encoding"*).  The scatter comparison shows two panels — *Baseline (Fixed k)* and *Q-Table* — for the same sample, with colour-coded cluster assignments.
+
+---
+
 ## 🎮 Usage
 
 ### Complete Two-Phase Training
